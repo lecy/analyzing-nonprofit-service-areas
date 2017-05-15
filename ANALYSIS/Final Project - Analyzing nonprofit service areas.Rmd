@@ -5,6 +5,7 @@ date: "May 11, 2017"
 output:
   html_document:
     df_print: paged
+    keep_md: true
     theme: cerulean
     highlight: haddock
     toc: yes
