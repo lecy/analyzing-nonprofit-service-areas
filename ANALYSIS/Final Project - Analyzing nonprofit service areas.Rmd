@@ -1,0 +1,298 @@
+---
+title: "Spatial Effects of Nonprofit Services in Impoverished Communities"
+author: "Matt McKnight"
+date: "May 11, 2017"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+## Create NPO data.frame
+``````{r, message=FALSE, warning=FALSE}
+
+# Import subset from NCCS BMF Data on nonprofits in Syr MSA
+load("C:/Users/mlmck/Documents/analyzing-nonprofit-service-areas/DATA/syr_orgs.Rda")
+
+# Subset - Extract poverty orgs
+pov_orgs <- syr_orgs[which (  syr_orgs$NTEECC == "B61" | 
+                              syr_orgs$NTEECC == "B82" |
+                              syr_orgs$NTEECC == "B92" |
+                            syr_orgs$nteeFinal1 == "E" | 
+                            syr_orgs$nteeFinal1 == "F" |
+                            syr_orgs$nteeFinal1 == "I" |
+                              syr_orgs$NTEECC == "K30" |
+                              syr_orgs$NTEECC == "K31" |
+                              syr_orgs$NTEECC == "K34" |
+                              syr_orgs$NTEECC == "K35" |
+                              syr_orgs$NTEECC == "K36" |
+                            syr_orgs$nteeFinal1 == "L" |  
+                            syr_orgs$nteeFinal1 == "O" |
+                            syr_orgs$nteeFinal1 == "P" |  
+                            syr_orgs$nteeFinal1 == "R" |  
+                            syr_orgs$nteeFinal1 == "S" |
+                            syr_orgs$nteeFinal1 == "T"), ]
+
+#DROP Vars with NAs
+pov_orgs$PFFRCD <- pov_orgs$TAXPER <- NULL
+
+```
+
+
+## Geocode selected Poverty Organization data
+``````{r eval=FALSE}
+print("Don't run me")
+
+# download specific ggmap, register Google key
+devtools::install_github("dkahle/ggmap")
+register_google(key = 'AIzaSyAMrECdXqpOt443ms6nzh118uUsqC2lE6M',
+                account_type = "premium", day_limit = 15000)
+
+# subset orgs for gecoding address information
+pov_orgs_gps <- subset(pov_orgs, select=c(EIN:INCOME))
+
+pov_orgs_gps$whole_address <- do.call(paste, c(pov_orgs_gps[ 
+                                      c("ADDRESS", "CITY","STATE",
+                                        "ZIP5")], sep = ", ")) 
+
+pov_orgs_gps <- subset(pov_orgs_gps, select=c(whole_address, EIN:INCOME))
+
+for (i in 1:nrow(pov_orgs_gps)) {
+  latlon = geocode(pov_orgs_gps[i,1]) 
+  pov_orgs_gps$lon[i] = as.numeric(latlon[1])
+  pov_orgs_gps$lat[i] = as.numeric(latlon[2])
+}
+
+# Make sure you find a way to then take any PO Boxes and place them in the 
+# center of centroids, and only the ones that are NAs.
+```
+```{r}
+# Dropping missing values
+head(syr_orgs)
+load("F:/Spring 2017/R Course/Data Project/R Files/pov_orgs_gps.Rda")
+pov_orgs_gps_nona <- na.omit(pov_orgs_gps)
+
+```
+
+
+## Create Service Catchment Area data
+```{r, message=FALSE, warning=FALSE}
+library( sp )  
+library( rgeos )
+library( spatialEco ) 
+library( ggmap )
+library( rgdal )
+```
+```{r}
+class(pov_orgs_gps_nona)
+coordinates(pov_orgs_gps_nona) = ~lat+lon
+class( pov_orgs_gps_nona )
+plot( pov_orgs_gps_nona )
+
+# Create buffer zone around each point
+
+pov_orgs_gps_nona_buff <- gBuffer( pov_orgs_gps_nona, width=.025, byid=TRUE )
+plot( pov_orgs_gps_nona_buff, main="NPO service buffer zone (1.5 miles?)" )
+class( pov_orgs_gps_nona_buff )
+
+```
+
+
+## Download & clean Census ACS 2011-2015 5-yr data
+```{r, message=FALSE, warning=FALSE}
+# Census API 
+# install.packages("devtools")
+devtools::install_github("hrecht/censusapi")
+censuskey <- "f8064a17832b439e690be95ab0e0ef9a78617584"
+
+
+# Us Census API Extraction
+library(devtools)
+library(censusapi)
+library(plyr)
+library(gdata)
+```
+```{r}
+acs_2015 <- getCensus(name="acs5",
+                      vintage = 2015,
+                      key = censuskey,
+                      vars=c("NAME", 
+                             "B25077_001E", "B25003_001E", "B25003_002E", 
+                             "B25003_003E", "B25002_001E", "B25002_002E",
+                             "B25002_003E",
+                             "B01003_001E", "B02001_001E", "B02001_002E",
+                             "B02001_003E", "B02001_004E", "B02001_005E",
+                             "B02001_006E", "B02001_007E", "B02001_008E",
+                             "B03001_003E", 
+                             "GEOID"), 
+                      region="tract:*", regionin="state:36")
+
+# subset to Syracuse 
+# sum(acs_2015$county == "067")
+# sum(acs_2015$county == "075")
+# sum(acs_2015$county == "053")
+
+acs_2015_syr <- acs_2015[which (acs_2015$county == "067" | 
+                                acs_2015$county == "075" |
+                                acs_2015$county == "053"), ]
+```
+```{r, results="hide"}
+
+rename(acs_2015_syr, 
+       c("B25077_001E" = "mdn_hous_val", "B25003_001E" = "tenure_tot", 
+         "B25003_002E" = "tenure_own", "B25003_003E" = "tenure_rent",
+         "B25002_001E" = "tot_occup", "B25002_002E" = "occupied",
+         "B25002_003E" = "vacant", "B01003_001E" = "tot_pop",       
+         "B02001_001E" = "tot_race", "B02001_002E" = "white",             
+         "B02001_003E" = "black", "B02001_004E" = "am_ind",
+         "B02001_005E" = "asian", "B02001_006E" = "islander",
+         "B02001_007E" = "other", "B02001_008E" = "mixed",
+         "B03001_003E" = "hispanic"
+         ))
+
+
+acs_2015_syr <- rename.vars(acs_2015_syr,
+            c("B25077_001E", "B25003_001E", "B25003_002E", "B25003_003E",
+              "B25002_001E", "B25002_002E", "B25002_003E", "B01003_001E",
+              "B02001_001E", "B02001_002E", "B02001_003E", "B02001_004E",
+              "B02001_005E", "B02001_006E", "B02001_007E", "B02001_008E", 
+              "B03001_003E"),  
+            c("mdn_hous_val", "tenure_tot", "tenure_own", "tenure_rent",
+              "tot_occup", "occupied", "vacant", "tot_pop", 
+              "tot_race", "white", "black", "am_ind",
+              "asian", "islander", "other", "mixed",
+              "hispanic"))
+            
+names(acs_2015_syr)
+
+```
+
+
+## Census Shapefiles
+```{r,message=FALSE, warning=FALSE}
+
+# load package: rgdal
+library(rgdal)
+library( geojsonio )
+
+```
+```{r}
+
+setwd("C:/Users/mlmck/Documents/analyzing-nonprofit-service-areas/")
+
+
+# Census tracts shapefiles of Syracuse MSA, changed to geojson files
+Mad_county <- readOGR(dsn="SHAPEFILES/Madison-ct", layer="tl_2010_36053_tract10")
+geojson_write( Mad_county, geometry="polygon", file="Mad_county.geojson" )
+class(Mad_county)
+plot(Mad_county)  
+names(Mad_county)
+
+On_county <- readOGR(dsn="SHAPEFILES/Onondaga-ct", layer="tl_2010_36067_tract10")
+geojson_write( On_county, geometry="polygon", file="On_county.geojson" )
+class(On_county)
+plot(On_county)  
+names(On_county)
+
+Osw_county <- readOGR(dsn="SHAPEFILES/Oswego-ct", layer="tl_2010_36075_tract10")
+geojson_write( Osw_county, geometry="polygon", file="Osw_county.geojson" )
+class(Osw_county)
+plot(Osw_county)  
+names(Osw_county)
+
+```
+
+
+## Add Syracuse MSA census tract data to census tract shp files
+```{r, message=FALSE, warning=FALSE}
+
+library( acs )
+library( tigris )
+library( spatialEco )
+library( sp ) 
+library( leaflet )
+library( raster )
+```
+```{r}
+# drop NAs
+Mad_county <- na.omit(Mad_county)
+On_county <- na.omit(On_county)
+Osw_county <- na.omit(Osw_county)
+
+#Merge spatial files 
+syr_msa <- union(Mad_county, On_county)
+syr_msa <- union(syr_msa, Osw_county)
+plot( syr_msa )
+
+# Merge data with MSA shp file
+syr_merged <- geo_join(syr_msa, acs_2015_syr, "GEOID10", "GEOID")
+plot( syr_merged )
+
+
+
+
+```
+
+
+## Create centroid points for each census tract
+
+```{r, message=FALSE, warning=FALSE}
+library( rgeos )
+
+```
+```{r}
+
+syr_merged_cen = gCentroid(syr_merged,byid=TRUE)
+plot( syr_merged )
+points(coordinates(syr_merged),pch=20)
+points(syr_merged_cen,pch=20)
+
+```
+
+
+## Spatial Projection difficulties
+### Point shp file for Nonprofit orgs does not show up with census shapefiles, even after placing both in the same projection. 
+```{r}
+
+## Correct spatial projection ##
+
+proj4string(syr_merged) <- NA_character_
+proj4string(syr_merged_cen) <- NA_character_
+proj4string(syr_merged) <- CRS("+proj=longlat +datum=WGS84")
+proj4string(syr_merged) <- CRS("+proj=longlat +datum=WGS84")
+
+# Check
+plot( syr_merged )
+points(coordinates(syr_merged),pch=20)
+points(syr_merged_cen,pch=20)
+
+# Not sure why these points dont match up below...
+plot( pov_orgs_gps_nona)
+points(coordinates(syr_merged),pch=20)
+points(syr_merged_cen,pch=20)
+
+names( pov_orgs_gps_nona )
+
+```
+
+
+## Run Analysis on Orgs in wealthier / white places versus poverty / racially diverse neighborhoods
+```{r}
+
+## Distance analysis b/w centroid centers and Nonprofit buffers
+
+# neighbor analysis?
+
+## Number of nonprofits location by census tract income or race
+
+```
+
+
+## Final section: Account for all urban census tracts in 25 cities
+
+
+```{R}
+
+
+```
+
