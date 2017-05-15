@@ -3,18 +3,68 @@ title: "Spatial Effects of Nonprofit Services in Impoverished Communities"
 author: "Matt McKnight"
 date: "May 11, 2017"
 output:
+  html_document:
+    df_print: paged
+    theme: cerulean
+    highlight: haddock
+    toc: yes
+    toc_float: yes
+    code_fold: hide
   pdf_document: default
-  html_document: default
 ---
 
 
-## Create NPO data.frame
-``````{r, message=FALSE, warning=FALSE}
+### Setup Chunk
+
+*In this chunk set your global options like message suppression and image size. Load all required libraries up front.*
+
+```{r setup, include=FALSE}
+
+# global chunk options
+knitr::opts_chunk$set(echo = TRUE, warning=F, message=F, fig.width=10)
+
+library( sp )  
+library( rgeos )
+library( spatialEco ) 
+library( ggmap )
+library( rgdal )
+
+library(devtools)
+library(censusapi)
+library(plyr)
+library(gdata)
+
+library( geojsonio )
+
+library( acs )
+library( tigris )
+library( spatialEco )
+library( sp ) 
+library( leaflet )
+library( raster )
+
+```
+
+
+
+# NONPROFIT DATA
+
+## Create NPO Data Frame
+
+```{r}
 
 # Import subset from NCCS BMF Data on nonprofits in Syr MSA
-load("C:/Users/mlmck/Documents/analyzing-nonprofit-service-areas/DATA/syr_orgs.Rda")
+
+# absolute path - bad because other people can't run this code
+# load("C:/Users/mlmck/Documents/analyzing-nonprofit-service-areas/DATA/syr_orgs.Rda")
+
+# relative path - others can run if they clone your repo
+# two dots moves up one folder
+load( "../DATA/syr_orgs.Rda" )
+
 
 # Subset - Extract poverty orgs
+
 pov_orgs <- syr_orgs[which (  syr_orgs$NTEECC == "B61" | 
                               syr_orgs$NTEECC == "B82" |
                               syr_orgs$NTEECC == "B92" |
@@ -34,21 +84,27 @@ pov_orgs <- syr_orgs[which (  syr_orgs$NTEECC == "B61" |
                             syr_orgs$nteeFinal1 == "T"), ]
 
 #DROP Vars with NAs
-pov_orgs$PFFRCD <- pov_orgs$TAXPER <- NULL
+
+pov_orgs$PFFRCD <- pov_orgs$TAXPER <- NULL    # I don't know what this does?
 
 ```
 
 
-## Geocode selected Poverty Organization data
-``````{r eval=FALSE}
+## Geocode Poverty Organizations
+
+```{r eval=FALSE}
+
 print("Don't run me")
 
 # download specific ggmap, register Google key
+
 devtools::install_github("dkahle/ggmap")
+
 register_google(key = 'AIzaSyAMrECdXqpOt443ms6nzh118uUsqC2lE6M',
                 account_type = "premium", day_limit = 15000)
 
 # subset orgs for gecoding address information
+
 pov_orgs_gps <- subset(pov_orgs, select=c(EIN:INCOME))
 
 pov_orgs_gps$whole_address <- do.call(paste, c(pov_orgs_gps[ 
@@ -65,27 +121,31 @@ for (i in 1:nrow(pov_orgs_gps)) {
 
 # Make sure you find a way to then take any PO Boxes and place them in the 
 # center of centroids, and only the ones that are NAs.
+
 ```
+
+
+
+### Drop missing values
+
 ```{r}
-# Dropping missing values
+
 head(syr_orgs)
+
 load("F:/Spring 2017/R Course/Data Project/R Files/pov_orgs_gps.Rda")
 pov_orgs_gps_nona <- na.omit(pov_orgs_gps)
 
 ```
 
 
-## Create Service Catchment Area data
-```{r, message=FALSE, warning=FALSE}
-library( sp )  
-library( rgeos )
-library( spatialEco ) 
-library( ggmap )
-library( rgdal )
-```
+## Create Service Catchment Areas
+
+
 ```{r}
-class(pov_orgs_gps_nona)
-coordinates(pov_orgs_gps_nona) = ~lat+lon
+
+class( pov_orgs_gps_nona )
+coordinates( pov_orgs_gps_nona ) = ~lat+lon
+
 class( pov_orgs_gps_nona )
 plot( pov_orgs_gps_nona )
 
@@ -98,57 +158,77 @@ class( pov_orgs_gps_nona_buff )
 ```
 
 
-## Download & clean Census ACS 2011-2015 5-yr data
-```{r, message=FALSE, warning=FALSE}
+# CENSUS DATA
+
+Download & clean Census ACS 2011-2015 5-yr data
+
+## Census API Package
+
+```{r}
+
 # Census API 
 # install.packages("devtools")
-devtools::install_github("hrecht/censusapi")
+# devtools::install_github("hrecht/censusapi")
+
 censuskey <- "f8064a17832b439e690be95ab0e0ef9a78617584"
 
+var.list <- c("NAME", "B25077_001E", "B25003_001E", "B25003_002E", 
+              "B25003_003E", "B25002_001E", "B25002_002E",
+              "B25002_003E",
+              "B01003_001E", "B02001_001E", "B02001_002E",
+              "B02001_003E", "B02001_004E", "B02001_005E",
+              "B02001_006E", "B02001_007E", "B02001_008E",
+              "B03001_003E", 
+              "GEOID" )
 
-# Us Census API Extraction
-library(devtools)
-library(censusapi)
-library(plyr)
-library(gdata)
-```
-```{r}
-acs_2015 <- getCensus(name="acs5",
-                      vintage = 2015,
-                      key = censuskey,
-                      vars=c("NAME", 
-                             "B25077_001E", "B25003_001E", "B25003_002E", 
-                             "B25003_003E", "B25002_001E", "B25002_002E",
-                             "B25002_003E",
-                             "B01003_001E", "B02001_001E", "B02001_002E",
-                             "B02001_003E", "B02001_004E", "B02001_005E",
-                             "B02001_006E", "B02001_007E", "B02001_008E",
-                             "B03001_003E", 
-                             "GEOID"), 
-                      region="tract:*", regionin="state:36")
+acs_2015 <- getCensus( name="acs5",
+                       vintage = 2015,
+                       key = censuskey,
+                       vars=var.list, 
+                       region="tract:*", 
+                       regionin="state:36" 
+                     )
+
 
 # subset to Syracuse 
 # sum(acs_2015$county == "067")
 # sum(acs_2015$county == "075")
 # sum(acs_2015$county == "053")
 
+
+
 acs_2015_syr <- acs_2015[which (acs_2015$county == "067" | 
                                 acs_2015$county == "075" |
                                 acs_2015$county == "053"), ]
 ```
+
+
+
+
+
+## Rename Variables
+
 ```{r, results="hide"}
 
-rename(acs_2015_syr, 
-       c("B25077_001E" = "mdn_hous_val", "B25003_001E" = "tenure_tot", 
-         "B25003_002E" = "tenure_own", "B25003_003E" = "tenure_rent",
-         "B25002_001E" = "tot_occup", "B25002_002E" = "occupied",
-         "B25002_003E" = "vacant", "B01003_001E" = "tot_pop",       
-         "B02001_001E" = "tot_race", "B02001_002E" = "white",             
-         "B02001_003E" = "black", "B02001_004E" = "am_ind",
-         "B02001_005E" = "asian", "B02001_006E" = "islander",
-         "B02001_007E" = "other", "B02001_008E" = "mixed",
+acs_2015_syr <-  rename( acs_2015_syr, 
+       c("B25077_001E" = "mdn_hous_val", 
+         "B25003_001E" = "tenure_tot", 
+         "B25003_002E" = "tenure_own", 
+         "B25003_003E" = "tenure_rent",
+         "B25002_001E" = "tot_occup", 
+         "B25002_002E" = "occupied",
+         "B25002_003E" = "vacant", 
+         "B01003_001E" = "tot_pop",       
+         "B02001_001E" = "tot_race", 
+         "B02001_002E" = "white",             
+         "B02001_003E" = "black", 
+         "B02001_004E" = "am_ind",
+         "B02001_005E" = "asian", 
+         "B02001_006E" = "islander",
+         "B02001_007E" = "other", 
+         "B02001_008E" = "mixed",
          "B03001_003E" = "hispanic"
-         ))
+        ))
 
 
 acs_2015_syr <- rename.vars(acs_2015_syr,
@@ -163,20 +243,21 @@ acs_2015_syr <- rename.vars(acs_2015_syr,
               "asian", "islander", "other", "mixed",
               "hispanic"))
             
-names(acs_2015_syr)
+names( acs_2015_syr )
 
 ```
 
+
+
+# MAPS
 
 ## Census Shapefiles
-```{r,message=FALSE, warning=FALSE}
 
-# load package: rgdal
-library(rgdal)
-library( geojsonio )
 
-```
 ```{r}
+
+# Move this chunk to your shapefiles folder to show how you produced the geojson files
+
 
 setwd("C:/Users/mlmck/Documents/analyzing-nonprofit-service-areas/")
 
@@ -203,16 +284,11 @@ names(Osw_county)
 ```
 
 
-## Add Syracuse MSA census tract data to census tract shp files
-```{r, message=FALSE, warning=FALSE}
+## Add Data to Shapefiles
 
-library( acs )
-library( tigris )
-library( spatialEco )
-library( sp ) 
-library( leaflet )
-library( raster )
-```
+Add Syracuse MSA census tract data to census tract shp files
+
+
 ```{r}
 # drop NAs
 Mad_county <- na.omit(Mad_county)
@@ -236,10 +312,7 @@ plot( syr_merged )
 
 ## Create centroid points for each census tract
 
-```{r, message=FALSE, warning=FALSE}
-library( rgeos )
 
-```
 ```{r}
 
 syr_merged_cen = gCentroid(syr_merged,byid=TRUE)
@@ -276,7 +349,12 @@ names( pov_orgs_gps_nona )
 ```
 
 
-## Run Analysis on Orgs in wealthier / white places versus poverty / racially diverse neighborhoods
+# RACIAL ANALYSIS
+
+## 
+
+Run Analysis on Orgs in wealthier / white places versus poverty / racially diverse neighborhoods
+
 ```{r}
 
 ## Distance analysis b/w centroid centers and Nonprofit buffers
