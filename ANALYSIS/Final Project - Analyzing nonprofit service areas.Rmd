@@ -15,10 +15,6 @@ output:
 ---
 
 
-### Setup Chunk
-
-*In this chunk set your global options like message suppression and image size. Load all required libraries up front.*
-
 ```{r setup, include=FALSE}
 
 # global chunk options
@@ -30,19 +26,22 @@ library( spatialEco )
 library( ggmap )
 library( rgdal )
 
-library(devtools)
-library(censusapi)
-library(plyr)
-library(gdata)
+library( devtools )
+library( censusapi )
+library( plyr )
+library( gdata )
 
 library( geojsonio )
 
 library( acs )
 library( tigris )
 library( spatialEco )
-library( sp ) 
+library( sf ) 
 library( leaflet )
 library( raster )
+
+library(TSP)
+library(magrittr)
 
 ```
 
@@ -56,11 +55,6 @@ library( raster )
 
 # Import subset from NCCS BMF Data on nonprofits in Syr MSA
 
-# absolute path - bad because other people can't run this code
-# load("C:/Users/mlmck/Documents/analyzing-nonprofit-service-areas/DATA/syr_orgs.Rda")
-
-# relative path - others can run if they clone your repo
-# two dots moves up one folder
 load( "../DATA/syr_orgs.Rda" )
 
 
@@ -83,10 +77,6 @@ pov_orgs <- syr_orgs[which (  syr_orgs$NTEECC == "B61" |
                             syr_orgs$nteeFinal1 == "R" |  
                             syr_orgs$nteeFinal1 == "S" |
                             syr_orgs$nteeFinal1 == "T"), ]
-
-#DROP Vars with NAs
-
-pov_orgs$PFFRCD <- pov_orgs$TAXPER <- NULL    # I don't know what this does?
 
 ```
 
@@ -144,6 +134,9 @@ pov_orgs_gps_nona <- na.omit(pov_orgs_gps)
 
 ```{r}
 
+# I am planning on cutting this section out in favor of doing the buffering a different way in the analysis section
+
+
 class( pov_orgs_gps_nona )
 coordinates( pov_orgs_gps_nona ) = ~lat+lon
 
@@ -173,13 +166,12 @@ Download & clean Census ACS 2011-2015 5-yr data
 
 censuskey <- "f8064a17832b439e690be95ab0e0ef9a78617584"
 
-var.list <- c("NAME", "B25077_001E", "B25003_001E", "B25003_002E", 
-              "B25003_003E", "B25002_001E", "B25002_002E",
-              "B25002_003E",
-              "B01003_001E", "B02001_001E", "B02001_002E",
-              "B02001_003E", "B02001_004E", "B02001_005E",
-              "B02001_006E", "B02001_007E", "B02001_008E",
-              "B03001_003E", 
+var.list <- c("NAME", 
+              "B25077_001E", "B25003_001E", "B25003_002E", "B25003_003E",
+              "B25002_001E", "B25002_002E", "B25002_003E", "B01003_001E",
+              "B03001_001E", "B03002_003E", "B03002_004E", "B03002_005E",
+              "B03002_006E", "B03002_007E", "B03002_008E", "B03002_009E", 
+              "B03001_002E", "B03001_003E", 
               "GEOID" )
 
 acs_2015 <- getCensus( name="acs5",
@@ -211,7 +203,9 @@ acs_2015_syr <- acs_2015[which (acs_2015$county == "067" |
 
 ```{r, results="hide"}
 
-acs_2015_syr <-  rename( acs_2015_syr, 
+# Race variables are single race, non-hispanic. For example, "white" is really "white non-hispanic." This is true for every race category listed except, obviously, hispanic.
+
+rename( acs_2015_syr, 
        c("B25077_001E" = "mdn_hous_val", 
          "B25003_001E" = "tenure_tot", 
          "B25003_002E" = "tenure_own", 
@@ -220,30 +214,35 @@ acs_2015_syr <-  rename( acs_2015_syr,
          "B25002_002E" = "occupied",
          "B25002_003E" = "vacant", 
          "B01003_001E" = "tot_pop",       
-         "B02001_001E" = "tot_race", 
-         "B02001_002E" = "white",             
-         "B02001_003E" = "black", 
-         "B02001_004E" = "am_ind",
-         "B02001_005E" = "asian", 
-         "B02001_006E" = "islander",
-         "B02001_007E" = "other", 
-         "B02001_008E" = "mixed",
+         "B03001_001E" = "tot_race", 
+         "B03002_003E" = "white",             
+         "B03002_004E" = "black", 
+         "B03002_005E" = "am_ind",
+         "B03002_006E" = "asian", 
+         "B03002_007EE" = "islander",
+         "B03002_008E" = "other", 
+         "B03002_009E" = "mixed",
+         "B03001_002E" = "not_hispanic",
          "B03001_003E" = "hispanic"
-        ))
-
+      
+           ))
 
 acs_2015_syr <- rename.vars(acs_2015_syr,
             c("B25077_001E", "B25003_001E", "B25003_002E", "B25003_003E",
               "B25002_001E", "B25002_002E", "B25002_003E", "B01003_001E",
-              "B02001_001E", "B02001_002E", "B02001_003E", "B02001_004E",
-              "B02001_005E", "B02001_006E", "B02001_007E", "B02001_008E", 
-              "B03001_003E"),  
+              "B03001_001E", "B03002_003E", "B03002_004E", "B03002_005E",
+              "B03002_006E", "B03002_007E", "B03002_008E", "B03002_009E", 
+              "B03001_002E", "B03001_003E"),  
             c("mdn_hous_val", "tenure_tot", "tenure_own", "tenure_rent",
               "tot_occup", "occupied", "vacant", "tot_pop", 
               "tot_race", "white", "black", "am_ind",
               "asian", "islander", "other", "mixed",
-              "hispanic"))
-            
+              "not_hispanic", "hispanic"))
+
+# Create census race proportion variable
+
+acs_2015_syr$porp_white <- (acs_2015_syr$white) / (acs_2015_syr$tot_race)
+
 names( acs_2015_syr )
 
 ```
@@ -259,27 +258,30 @@ names( acs_2015_syr )
 
 # Move this chunk to your shapefiles folder to show how you produced the geojson files
 
+# I made another Rmd files with this chunk but also kept the original chunk here. Is that what you would like?
 
-setwd("C:/Users/mlmck/Documents/analyzing-nonprofit-service-areas/")
-
+setwd( "../SHAPEFILES/" )
 
 # Census tracts shapefiles of Syracuse MSA, changed to geojson files
-Mad_county <- readOGR(dsn="SHAPEFILES/Madison-ct", layer="tl_2010_36053_tract10")
+Mad_county <- readOGR(dsn="Madison-ct", layer="tl_2010_36053_tract10")
 geojson_write( Mad_county, geometry="polygon", file="Mad_county.geojson" )
 class(Mad_county)
-plot(Mad_county)  
+plot(Mad_county)
+title(main = "Census Tracts in Madison County, NY")
 names(Mad_county)
 
-On_county <- readOGR(dsn="SHAPEFILES/Onondaga-ct", layer="tl_2010_36067_tract10")
+On_county <- readOGR(dsn="Onondaga-ct", layer="tl_2010_36067_tract10")
 geojson_write( On_county, geometry="polygon", file="On_county.geojson" )
 class(On_county)
 plot(On_county)  
+title(main = "Census Tracts in Onondaga County, NY")
 names(On_county)
 
-Osw_county <- readOGR(dsn="SHAPEFILES/Oswego-ct", layer="tl_2010_36075_tract10")
+Osw_county <- readOGR(dsn="Oswego-ct", layer="tl_2010_36075_tract10")
 geojson_write( Osw_county, geometry="polygon", file="Osw_county.geojson" )
 class(Osw_county)
 plot(Osw_county)  
+title(main = "Census Tracts in Oswego County, NY")
 names(Osw_county)
 
 ```
@@ -304,8 +306,10 @@ plot( syr_msa )
 # Merge data with MSA shp file
 syr_merged <- geo_join(syr_msa, acs_2015_syr, "GEOID10", "GEOID")
 plot( syr_merged )
+title(main = "Syracuse MSA, NY")
 
-
+# Create geojson file of Syr MSA 
+geojson_write( syr_merged, geometry="polygon", file="syr_merged.geojson" )
 
 
 ```
@@ -317,53 +321,207 @@ plot( syr_merged )
 ```{r}
 
 syr_merged_cen = gCentroid(syr_merged,byid=TRUE)
+
+geojson_write( syr_merged_cen, geometry="point", file="syr_merged_cen.geojson" )
+
+
 plot( syr_merged )
 points(coordinates(syr_merged),pch=20)
 points(syr_merged_cen,pch=20)
 
 ```
 
+### Create zoom enabled map of Syracuse, NY
 
-## Spatial Projection difficulties
-### Point shp file for Nonprofit orgs does not show up with census shapefiles, even after placing both in the same projection. 
 ```{r}
+map <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY")
 
-## Correct spatial projection ##
+map %>% addProviderTiles(providers$CartoDB)
 
-proj4string(syr_merged) <- NA_character_
-proj4string(syr_merged_cen) <- NA_character_
-proj4string(syr_merged) <- CRS("+proj=longlat +datum=WGS84")
-proj4string(syr_merged) <- CRS("+proj=longlat +datum=WGS84")
-
-# Check
-plot( syr_merged )
-points(coordinates(syr_merged),pch=20)
-points(syr_merged_cen,pch=20)
-
-# Not sure why these points dont match up below...
-plot( pov_orgs_gps_nona)
-points(coordinates(syr_merged),pch=20)
-points(syr_merged_cen,pch=20)
-
-names( pov_orgs_gps_nona )
 
 ```
 
-
-# RACIAL ANALYSIS
-
-## 
-
-Run Analysis on Orgs in wealthier / white places versus poverty / racially diverse neighborhoods
+### Set the view of the Syracuse MSA
 
 ```{r}
 
-## Distance analysis b/w centroid centers and Nonprofit buffers
 
-# neighbor analysis?
+# syr_merged_cen <- geojsonio::geojson_read("syr_merged_cen.geojson", what = "sp")
 
-## Number of nonprofits location by census tract income or race
+syr_map <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
+  addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
+  addPolygons(data = syr_merged,
+              fillOpacity = 0.3
+              ) %>%
+  addCircles(lng=pov_orgs_gps_nona$lon, lat=pov_orgs_gps_nona$lat) %>%
+  addCircles(data = syr_merged_cen)
 
+syr_map %>% addProviderTiles(providers$CartoDB)  
+
+
+              
+```
+
+### Edit color format of polygons and data points
+
+```{r}
+
+
+syr_map <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
+  addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
+  addPolygons(data = syr_merged,
+              fillOpacity = 0.3, weight = 2
+              ) %>%
+  addCircles(lng=pov_orgs_gps_nona$lon, lat=pov_orgs_gps_nona$lat,
+             color= "red", opacity = 1.0) %>%
+  addCircles(data = syr_merged_cen, color= "black", opacity = 1.0)
+
+syr_map %>% addProviderTiles(providers$CartoDB)  
+
+```
+
+### Adding census tract information to map
+
+```{r}
+
+# By race
+
+pal <- colorNumeric(
+  palette = "Blues",
+  domain = acs_2015_syr$porp_white )
+
+
+syr_map <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
+  addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
+  addPolygons(data = syr_merged, fillOpacity = 0.3, weight = 2,
+              color = ~pal(acs_2015_syr$porp_white)) %>%
+  addCircles(lng=pov_orgs_gps_nona$lon, lat=pov_orgs_gps_nona$lat,
+             color= "red", opacity = 1.0) %>%
+  addCircles(data = syr_merged_cen, color= "black", opacity = 1.0) 
+
+syr_map %>% addProviderTiles(providers$CartoDB)
+
+
+# By Income level
+
+pal2 <- colorNumeric(
+  palette = "Blues",
+  domain = acs_2015_syr$mdn_hous_val )
+
+
+syr_map <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
+  addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
+  addPolygons(data = syr_merged, fillOpacity = 0.3, weight = 2,
+              fillColor = ~pal2(acs_2015_syr$mdn_hous_val)) %>%
+  addCircles(lng=pov_orgs_gps_nona$lon, lat=pov_orgs_gps_nona$lat,
+             color= "red", opacity = 1.0) %>%
+  addCircles(data = syr_merged_cen, color= "black", opacity = 1.0) 
+
+syr_map %>% addProviderTiles(providers$CartoDB)
+
+
+```
+
+# ANALYSIS
+
+### Spatial analysis using leaflet 
+
+```{r}
+
+# URL's below explain how to use functions and arguments in leaflet. It also contains info which notes that the radius of a circle is in meters. Therefore, 1.5 miles converts to 2400 meters.
+# https://rstudio.github.io/leaflet/shapes.html
+# https://github.com/Robinlovelace/Creating-maps-in-R/blob/master/intro-spatial.Rmd
+
+# Creating a buffer zone, 1.5 miles from every NPO
+# I followed the info from this site and tried to apply it to the analysis
+# http://walkerke.github.io/2016/12/spatial-pipelines/
+
+
+# Example using one point: 
+test_buffer <- c(-76.16674, 43.03231) %>%
+  st_point() %>%
+  st_sfc(crs = 4326) %>%
+  st_transform(32618) %>%
+  st_buffer(dist = 2400)
+
+test_buffer_map <- test_buffer %>%
+  st_transform(4326) %>%
+  as("Spatial")
+
+syr_map %>%
+  addPolygons(data = test_buffer_map) %>% 
+  addProviderTiles(providers$CartoDB)
+
+# Attempt to use every pov_org location, but doesn't work. Coding error.
+# pov_orgs_buff <- c(pov_orgs_gps_nona$lon, pov_orgs_gps_nona$lat) %>%
+  # st_point() %>%
+  # st_sfc(crs = 4326) %>%
+  # st_transform(32618) %>%
+  # st_buffer(dist = 2400)
+
+# pov_orgs_buff_map <- pov_orgs_buff %>%
+  # st_transform(4326) %>%
+  # as("Spatial")
+
+# syr_map %>%
+  # addPolygons(data = pov_orgs_buff_map)
+
+# Alternative way to create buffer for pov_orgs
+
+pov_orgs_buff <- gBuffer(spgeom = pov_orgs_gps_nona, width = 2400)
+
+# proj4string(pov_orgs_buff) <- NA_character_
+# proj4string(syr_merged_cen) <- NA_character_
+# proj4string(pov_orgs_buff) <- CRS("+proj=longlat +datum=WGS84")
+# proj4string(syr_merged_cen) <- CRS("+proj=longlat +datum=WGS84")
+
+# inter <- gIntersection(pov_orgs_gps_nona, syr_merged_cen)
+
+# Chloropleth Map of median housing values
+
+pal2 <- colorNumeric(
+  palette = "Blues",
+  domain = acs_2015_syr$mdn_hous_val )
+
+syr_map <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
+  addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
+  addPolygons(data = syr_merged, fillOpacity = 0.3, weight = 2,
+              fillColor = ~pal2(acs_2015_syr$mdn_hous_val)) %>%
+  addCircles(lng=pov_orgs_gps_nona$lon, lat=pov_orgs_gps_nona$lat,
+             color= "red", opacity = .3, radius = 2400 ) %>%
+  addCircles(data = syr_merged_cen, color= "black", opacity = 1.0) 
+
+syr_map %>% addProviderTiles(providers$CartoDB)
+
+
+# Intersection with Census data, capture data
+  # number of orgs within 1.5 miles of tract's center 
+    #  nearest neighbor?
+    # distance analysis 
+
+
+# Poportion of census tract that are high/low diversity
+  # number of nonprofits by type in high/low racially diverse areas
+  # number of nonprofits by type in low/high income census tracts
+
+
+# Corr analysis between nonprofit access and census tract attributes
+  # Number of nonprofits location by census tract income or race
+    # Race
+    # Income
+  
 ```
 
 

@@ -1,0 +1,102 @@
+---
+title: "Shapefiles to geojson files"
+author: "Matt McKnight"
+date: "May 16, 2017"
+output:
+  html_document:
+    df_print: paged
+    keep_md: true
+    theme: cerulean
+    highlight: haddock
+    toc: yes
+    toc_float: yes
+    code_fold: hide
+  pdf_document: default
+---
+
+# SHAPEFILES TO GEOJSON FILES
+
+```{r setup, include=FALSE}
+
+# global chunk options
+knitr::opts_chunk$set(echo = TRUE, warning=F, message=F, fig.width=10)
+
+library( rgdal )
+library( geojsonio )
+
+```
+
+
+### Begin by setting working directory and reading into R the layer file for each census tract file
+
+```{r}
+
+setwd( "../SHAPEFILES/" )
+
+Mad_county <- readOGR(dsn="Madison-ct", layer="tl_2010_36053_tract10")
+
+On_county <- readOGR(dsn="Onondaga-ct", layer="tl_2010_36067_tract10")
+
+Osw_county <- readOGR(dsn="Oswego-ct", layer="tl_2010_36075_tract10")
+
+```
+
+### Then simply use the "geojson_write" command to convert orginal shapefiles into a singles geojson file
+
+```{r}
+
+geojson_write( Mad_county, geometry="polygon", file="Mad_county.geojson" )
+class(Mad_county)
+
+geojson_write( On_county, geometry="polygon", file="On_county.geojson" )
+class(On_county)
+
+geojson_write( Osw_county, geometry="polygon", file="Osw_county.geojson" )
+class(Osw_county)
+
+```
+
+### Geojson files can then be plotted using the plot function with the names of the variables found in the respective shapefile.
+
+```{r}
+
+plot(Mad_county)
+title(main = "Census Tracts in Madison County, NY")
+names(Mad_county)
+
+plot(On_county)  
+title(main = "Census Tracts in Onondaga County, NY")
+names(On_county)
+
+plot(Osw_county)  
+title(main = "Census Tracts in Oswego County, NY")
+names(Osw_county)
+
+```
+
+## Add Data to Shapefiles
+
+Add Syracuse MSA census tract data to census tract shp files
+
+
+```{r}
+# drop NAs
+Mad_county <- na.omit(Mad_county)
+On_county <- na.omit(On_county)
+Osw_county <- na.omit(Osw_county)
+
+#Merge spatial files 
+syr_msa <- union(Mad_county, On_county)
+syr_msa <- union(syr_msa, Osw_county)
+plot( syr_msa )
+
+# Merge data with MSA shp file
+syr_merged <- geo_join(syr_msa, acs_2015_syr, "GEOID10", "GEOID")
+plot( syr_merged )
+title(main = "Syracuse MSA, NY")
+
+# Create geojson file of Syr MSA 
+geojson_write( syr_merged, geometry="polygon", file="syr_merged.geojson" )
+
+
+```
