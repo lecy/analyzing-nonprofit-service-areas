@@ -20,23 +20,19 @@ output:
 # global chunk options
 knitr::opts_chunk$set(echo = TRUE, warning=F, message=F, fig.width=10)
 
-library( sp )  
-library( rgeos )
-library( spatialEco ) 
 library( ggmap )
 library( rgdal )
-
 library( devtools )
 library( censusapi )
 library( plyr )
 library( gdata )
-
 library( geojsonio )
-
 library( acs )
 library( tigris )
-library( spatialEco )
 library( sf ) 
+library( sp )  
+library( rgeos )
+library( spatialEco ) 
 library( leaflet )
 library( raster )
 
@@ -117,14 +113,17 @@ for (i in 1:nrow(pov_orgs_gps)) {
 
 
 
-### Drop missing values
+### Drop missing values, create geojson file for poverty organizations
 
 ```{r}
 
 head(syr_orgs)
 
-load("F:/Spring 2017/R Course/Data Project/R Files/pov_orgs_gps.Rda")
+load("../DATA/pov_orgs_gps.Rda")
 pov_orgs_gps_nona <- na.omit(pov_orgs_gps)
+
+geojson_write( pov_orgs_gps_nona, geometry="point", file="../SHAPEFILES/pov_orgs.geojson" )
+
 
 ```
 
@@ -169,6 +168,7 @@ censuskey <- "f8064a17832b439e690be95ab0e0ef9a78617584"
 var.list <- c("NAME", 
               "B25077_001E", "B25003_001E", "B25003_002E", "B25003_003E",
               "B25002_001E", "B25002_002E", "B25002_003E", "B01003_001E",
+              "B19013_001E", "B17020_002E", "B12006_001E", "B23025_005E",                      "B15003_017E", "B15003_018E",
               "B03001_001E", "B03002_003E", "B03002_004E", "B03002_005E",
               "B03002_006E", "B03002_007E", "B03002_008E", "B03002_009E", 
               "B03001_002E", "B03001_003E", 
@@ -205,6 +205,7 @@ acs_2015_syr <- acs_2015[which (acs_2015$county == "067" |
 
 # Race variables are single race, non-hispanic. For example, "white" is really "white non-hispanic." This is true for every race category listed except, obviously, hispanic.
 
+
 rename( acs_2015_syr, 
        c("B25077_001E" = "mdn_hous_val", 
          "B25003_001E" = "tenure_tot", 
@@ -213,13 +214,19 @@ rename( acs_2015_syr,
          "B25002_001E" = "tot_occup", 
          "B25002_002E" = "occupied",
          "B25002_003E" = "vacant", 
-         "B01003_001E" = "tot_pop",       
-         "B03001_001E" = "tot_race", 
+         "B01003_001E" = "tot_pop", 
+         "B19013_001E" = "mhh_income",
+         "B17020_002E" = "poverty",
+         "B12006_001E" = "labor_part",
+         "B23025_005E" = "unemploy",
+         "B15003_017E" = "high_sch",
+         "B15003_018E" = "ged",
+         "B03001_001E" = "tot_race",
          "B03002_003E" = "white",             
          "B03002_004E" = "black", 
          "B03002_005E" = "am_ind",
          "B03002_006E" = "asian", 
-         "B03002_007EE" = "islander",
+         "B03002_007E" = "islander",
          "B03002_008E" = "other", 
          "B03002_009E" = "mixed",
          "B03001_002E" = "not_hispanic",
@@ -230,11 +237,14 @@ rename( acs_2015_syr,
 acs_2015_syr <- rename.vars(acs_2015_syr,
             c("B25077_001E", "B25003_001E", "B25003_002E", "B25003_003E",
               "B25002_001E", "B25002_002E", "B25002_003E", "B01003_001E",
+              "B19013_001E", "B17020_002E", "B12006_001E", "B23025_005E",                      "B15003_017E", "B15003_018E",
               "B03001_001E", "B03002_003E", "B03002_004E", "B03002_005E",
               "B03002_006E", "B03002_007E", "B03002_008E", "B03002_009E", 
               "B03001_002E", "B03001_003E"),  
             c("mdn_hous_val", "tenure_tot", "tenure_own", "tenure_rent",
               "tot_occup", "occupied", "vacant", "tot_pop", 
+              "mhh_income", "poverty", "labor_part", "unemploy",
+              "high_sch", "ged",
               "tot_race", "white", "black", "am_ind",
               "asian", "islander", "other", "mixed",
               "not_hispanic", "hispanic"))
@@ -308,8 +318,8 @@ syr_merged <- geo_join(syr_msa, acs_2015_syr, "GEOID10", "GEOID")
 plot( syr_merged )
 title(main = "Syracuse MSA, NY")
 
-# Create geojson file of Syr MSA 
-geojson_write( syr_merged, geometry="polygon", file="syr_merged.geojson" )
+Create geojson file of Syr MSA 
+geojson_write( syr_merged, geometry="polygon", file="../SHAPEFILES/syr_merged.geojson" )
 
 
 ```
@@ -322,7 +332,7 @@ geojson_write( syr_merged, geometry="polygon", file="syr_merged.geojson" )
 
 syr_merged_cen = gCentroid(syr_merged,byid=TRUE)
 
-geojson_write( syr_merged_cen, geometry="point", file="syr_merged_cen.geojson" )
+geojson_write( syr_merged_cen, geometry="point", file="../SHAPEFILES/syr_merged_cen.geojson" )
 
 
 plot( syr_merged )
