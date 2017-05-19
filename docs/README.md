@@ -8,3 +8,8 @@ https://lecy.github.io/analyzing-nonprofit-service-areas/
 
 To edit site options or change the theme, go to **Settings -> GitHub Pages**.
 
+
+# Example HTML Page
+
+[GeoJson Example](Read_GeoJson_Example.html)
+
