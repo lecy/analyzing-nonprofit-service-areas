@@ -7,9 +7,9 @@ You can link to other project files, add images, and create tables.
 This will allow you to develop your project narrative and share your results through HTML files that link back to your code and the underlying data, making the project fully reproducible.
 
 
-# Example HTML Page
+# Converting shapefiles to geojson files
 
-[GeoJson Example](Read_GeoJson_Example.html)
+[Example here](Shapefiles_to_Geojson_Files.html)
 
 # Master HTML Page for total project
 
