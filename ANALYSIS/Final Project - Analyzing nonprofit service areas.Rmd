@@ -399,20 +399,40 @@ proj4string(centroids_buff) <- CRS.new
 proj4string(pov_orgs) <- CRS.new
 
 over <- over( pov_orgs, centroids_buff)
-syr$locate <- over$GEOID_full
-syr$count <- rep.int(1, 186)
+# syr$locate <- over$GEOID_full
+# syr$count <- rep.int(1, 186)
 
 # other option?
-syr$test <- 1:nrow(over_clean)
+# syr$test <- 1:nrow(over_clean)
+
+
+
+pal2 <- colorNumeric(
+  palette = "Blues",
+  domain = syr$mhh_income )
+
+syr_map2 <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
+  addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
+  addPolygons(data = syr, fillOpacity = 0.3, weight = 2,
+              color = ~pal2(syr$mhh_income)) %>%
+  addCircles(data = pov_orgs, color= "red", opacity = 1.0) %>%
+  addCircles(data = centroids, color= "black", opacity = 1.0) %>%
+  addPolygons(data = centroids_buff, fillOpacity = 0.3, weight = 2,)
+             
+syr_map2 %>% addProviderTiles(providers$CartoDB)
 
 # Not quite sure what is needed. How do I add up values for every centroid from the overlay?
 
 # Similar to above, but combines over and removing NAs into one step
-pov_orgs_t <- pov_orgs 
-pov_orgs_t$test <- pov_orgs[centroids_buff,]
+# pov_orgs_t <- pov_orgs 
+# pov_orgs_t$test <- pov_orgs[centroids_buff,]
+```
 
+### Analysis continued 
 
-
+```{r}
 # Poportion of census tract that are high/low diversity
   # number of nonprofits by type in high/low racially diverse areas
   # number of nonprofits by type in low/high income census tracts
