@@ -1,0 +1,282 @@
+---
+title: "Maps and Analysis"
+author: "Matt McKnight"
+date: "May 11, 2017"
+output:
+  html_document:
+    df_print: paged
+    keep_md: true
+    theme: cerulean
+    highlight: haddock
+    toc: yes
+    toc_float: yes
+    code_fold: hide
+  pdf_document: default
+---
+
+
+```{r setup, include=FALSE}
+
+# global chunk options
+knitr::opts_chunk$set(echo = TRUE, warning=F, message=F, fig.width=10)
+
+library( ggmap )
+library( rgdal )
+library( devtools )
+library( censusapi )
+library( plyr )
+library( gdata )
+library( geojsonio )
+library( acs )
+library( tigris )
+library( sf ) 
+library( sp )  
+library( rgeos )
+library( spatialEco ) 
+library( leaflet )
+library( raster )
+library( repmis )
+library( TSP )
+library( magrittr )
+
+```
+
+
+# MAPS
+
+## Load in Census Shapefiles from GitHub
+
+### Note: To see how these shapefiles were created, check [Shapefiles to Geojson Files](Shapefiles_to_Geojson_Files.hmtl) HTML file  for more information.
+
+
+```{r}
+
+file.url <- "https://raw.githubusercontent.com/lecy/analyzing-nonprofit-service-areas/master/SHAPEFILES/syr_merged.geojson"
+
+syr <- geojson_read( file.url, method="local", what="sp")
+
+spTransform(syr, CRS("+proj=longlat +datum=WGS84"))
+
+file.url <- "https://raw.githubusercontent.com/lecy/analyzing-nonprofit-service-areas/master/SHAPEFILES/syr_merged_cen.geojson"
+
+centroids <- geojson_read( file.url, method="local", what="sp")
+
+spTransform(centroids, CRS("+proj=longlat +datum=WGS84"))
+
+file.url <- "https://raw.githubusercontent.com/lecy/analyzing-nonprofit-service-areas/master/SHAPEFILES/pov_orgs.geojson"
+
+pov_orgs <- geojson_read( file.url, method="local", what="sp")
+
+spTransform(pov_orgs, CRS("+proj=longlat +datum=WGS84"))
+
+par( mar=c(0,0,0,0) )  # drop plot margins
+
+```
+
+
+##Check shapefiles with plots
+
+```{r}
+
+plot( syr )
+plot( centroids, col="black", pch = 20, add = T)
+
+plot( syr )
+plot( centroids, col="black", pch = 20, add = T )
+plot( pov_orgs, col="red", lwd = 2, add = T )
+
+names(syr)
+
+```
+
+
+### Create zoom enabled map of Syracuse, NY
+
+```{r}
+map <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY")
+
+map %>% addProviderTiles(providers$CartoDB)
+
+
+```
+
+### Set the view of the Syracuse MSA
+
+```{r}
+
+
+
+syr_map <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
+  addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
+  addPolygons(data = syr, fillOpacity = 0.3) %>%
+  addCircles(data = pov_orgs) %>%
+  addCircles(data = centroids)
+
+syr_map %>% addProviderTiles(providers$CartoDB)  
+
+
+              
+```
+
+### Edit color format of polygons and data points
+
+```{r}
+
+
+syr_map <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
+  addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
+  addPolygons(data = syr, fillOpacity = 0.3, weight = 2) %>%
+  addCircles(data = pov_orgs, color= "red", opacity = 1.0) %>%
+  addCircles(data = centroids, color= "black", opacity = 1.0)
+
+syr_map %>% addProviderTiles(providers$CartoDB)  
+
+```
+
+### Adding census tract information to map
+
+```{r}
+
+# change variables to be numeric
+
+syr$porp_white <- as.numeric(as.character(syr$porp_white))
+syr$porp_m <- as.numeric(as.character(syr$porp_m))
+syr$mhh_income <- as.numeric(as.character(syr$mhh_income))
+class(syr$porp_m)
+class(syr$porp_white)
+class(syr$mhh_income)
+
+# By race
+
+pal <- colorNumeric(
+  palette = "Blues",
+  domain = syr$porp_m )
+
+
+syr_map <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
+  addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
+  addPolygons(data = syr, fillOpacity = 0.3, weight = 2,
+              color = ~pal(syr$porp_m)) %>%
+  addCircles(data = pov_orgs, color= "red", opacity = 1.0) %>%
+  addCircles(data = centroids, color= "black", opacity = 1.0) 
+
+
+syr_map %>% addProviderTiles(providers$CartoDB)
+
+
+# By Income level
+
+pal2 <- colorNumeric(
+  palette = "Blues",
+  domain = syr$mhh_income )
+
+
+syr_map2 <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
+  addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
+  addPolygons(data = syr, fillOpacity = 0.3, weight = 2,
+              color = ~pal2(syr$mhh_income)) %>%
+  addCircles(data = pov_orgs, color= "red", opacity = 1.0) %>%
+  addCircles(data = centroids, color= "black", opacity = 1.0) 
+
+
+syr_map2 %>% addProviderTiles(providers$CartoDB)
+
+
+```
+
+# ANALYSIS
+
+## Create Service Catchment Areas
+
+
+```{r eval=FALSE}
+
+
+# Create buffer, calculate number of nonprofit points around centroids
+
+centroids_buff <- gBuffer(spgeom = centroids, width = .024, joinStyle="ROUND",                             byid = T)
+
+spTransform(centroids_buff, CRS("+proj=longlat +datum=WGS84"))
+
+# join census data to centroid buffer
+centroids_buff$ID <- c(1:186)
+syr$ID <- c(1:186)
+
+
+test.xy <- pov_orgs@data[c("lon", "lat")]
+coordinates( test.xy ) = ~lon+lat
+
+CRS.new<-CRS("+proj=longlat +datum=WGS84")
+proj4string(centroids_buff) <- CRS.new 
+proj4string(pov_orgs) <- CRS.new
+
+over <- over(pov_orgs,  centroids_buff)
+
+Table(over$tract)
+save table as new var in syr
+
+
+# other option?
+# syr$test <- 1:nrow(over_clean)
+
+plot(centroids_buff)
+points( pov_orgs, col="darkorange4", pch= 1 )
+
+
+pal2 <- colorNumeric(
+  palette = "Blues",
+  domain = syr$mhh_income )
+
+syr_map2 <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
+  addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
+  addPolygons(data = syr, fillOpacity = 0.3, weight = 2,
+              color = ~pal2(syr$mhh_income)) %>%
+  addCircles(data = pov_orgs, color= "red", opacity = 1.0) %>%
+  addCircles(data = centroids, color= "black", opacity = 1.0) %>%
+  addPolygons(data = centroids_buff, fillOpacity = 0.3, weight = 2)
+             
+syr_map2 %>% addProviderTiles(providers$CartoDB)
+
+# Not quite sure what is needed. How do I add up values for every centroid from the overlay?
+
+# Similar to above, but combines over and removing NAs into one step
+# pov_orgs_t <- pov_orgs 
+# pov_orgs_t$test <- pov_orgs[centroids_buff,]
+```
+
+### Analysis continued 
+
+```{r}
+# Poportion of census tract that are high/low diversity
+  # number of nonprofits by type in high/low racially diverse areas
+  # number of nonprofits by type in low/high income census tracts
+
+
+# Corr analysis between nonprofit access and census tract attributes
+  # Number of nonprofits location by census tract income or race
+    # Race
+    # Income
+  
+```
+
+
+## Final section: Account for all urban census tracts in 25 cities
+
+
+```{R}
+
+
+```
+
