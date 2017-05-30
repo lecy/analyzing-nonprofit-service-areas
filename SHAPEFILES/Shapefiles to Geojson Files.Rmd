@@ -30,6 +30,7 @@ library( plyr )
 library( tigris )
 library( rgeos )
 library( repmis )
+library( maptools )
 
 
 ```
@@ -70,11 +71,15 @@ source_data("https://github.com/lecy/analyzing-nonprofit-service-areas/blob/mast
 ### Clean census data GEOID
 
 The data downloaded from the census API includes values in GEOID cells that need to be removed prior to merging with shapefiles.
+
 ```{r}
+
 # Search term: deleting part of charactor in factor variable in r
 # http://stackoverflow.com/questions/5487164/r-how-to-replace-parts-of-variable-strings-within-data-frame 
 
-census_dat <- as.data.frame(sapply(acs_2015_syr,gsub,pattern="14000US",replacement=""))
+acs_2015_syr$GEOID2 <- gsub( acs_2015_syr$GEOID, pattern="14000US", replacement="" )
+
+# census_dat <- as.data.frame(sapply(acs_2015_syr,gsub,pattern="14000US",replacement=""))
 
 ```
 
@@ -84,9 +89,26 @@ census_dat <- as.data.frame(sapply(acs_2015_syr,gsub,pattern="14000US",replaceme
 
 syr_msa <- union(Mad_county, On_county)
 syr_msa <- union(syr_msa, Osw_county)
+
+syr_msa <- cbind( Mad_county, On_county )
+syr_msa <- cbind( syr_msa, Osw_county )
+
 plot( syr_msa )
 
 ```
+
+### TRY THIS
+
+```{r}
+
+syr_merged <- merge( syr_msa, census_dat, "GEOID_full", "GEOID" )
+
+```
+
+
+
+
+
 
 ### Clean census data GEOID to match shapefile GEOID
 
@@ -137,7 +159,7 @@ identical(test[['census_dat.GEOID']],test[['syr_msa.GEOID_full']])
 ```{r}
 
 # Merge data with MSA shp file
-syr_merged <- geo_join(syr_msa, census_dat, "GEOID_full", "GEOID")
+syr_merged <- geo_join( syr_msa, census_dat, "GEOID_full", "GEOID")
 plot( syr_merged )
 title(main = "Syracuse MSA, NY")
 
@@ -146,7 +168,14 @@ head(syr_merged)
 ```
 
 
+
+
+
+
+
+
 # GEOJSON FILES
+
 ### Convert shapefiles to geojson files for the Syracuse MSA
 
 ```{r}
@@ -158,6 +187,7 @@ geojson_write( syr_merged, geometry="polygon", file="syr_merged.geojson" )
 ### Create create shapefile with centroids for every census tract and convert to geojson format
 
 ```{r}
+
 syr_merged_cen = gCentroid(syr_merged,byid=TRUE)
 
 geojson_write( syr_merged_cen, geometry="point", file="syr_merged_cen.geojson" )
