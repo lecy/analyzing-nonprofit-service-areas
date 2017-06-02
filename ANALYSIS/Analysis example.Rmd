@@ -1,0 +1,160 @@
+---
+title: "Analysis example"
+author: "Matt McKnight"
+date: "June 1, 2017"
+output:
+  html_document:
+    df_print: paged
+    keep_md: true
+    theme: cerulean
+    highlight: haddock
+    toc: yes
+    toc_float: yes
+    code_fold: hide
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+
+# global chunk options
+knitr::opts_chunk$set(echo = TRUE, warning=F, message=F, fig.width=10)
+
+
+library( ggmap )
+library( rgdal )
+library( devtools )
+library( censusapi )
+library( plyr )
+library( gdata )
+library( geojsonio )
+library( acs )
+library( tigris )
+library( sf ) 
+library( sp )  
+library( rgeos )
+library( spatialEco ) 
+library( leaflet )
+library( raster )
+library( repmis )
+library( TSP )
+library( magrittr )
+library( lattice )
+library( GISTools )
+
+```
+
+
+# MAPS
+
+## Load in Census Shapefiles from GitHub
+
+```{r}
+
+file.url <- "https://raw.githubusercontent.com/lecy/analyzing-nonprofit-service-areas/master/SHAPEFILES/syr_merged.geojson"
+
+syr <- geojson_read( file.url, method="local", what="sp")
+
+spTransform(syr, CRS("+proj=longlat +datum=WGS84"))
+
+file.url <- "https://raw.githubusercontent.com/lecy/analyzing-nonprofit-service-areas/master/SHAPEFILES/syr_merged_cen.geojson"
+
+centroids <- geojson_read( file.url, method="local", what="sp")
+
+spTransform(centroids, CRS("+proj=longlat +datum=WGS84"))
+
+file.url <- "https://raw.githubusercontent.com/lecy/analyzing-nonprofit-service-areas/master/SHAPEFILES/pov_orgs.geojson"
+
+pov_orgs <- geojson_read( file.url, method="local", what="sp")
+
+spTransform(pov_orgs, CRS("+proj=longlat +datum=WGS84"))
+
+par( mar=c(0,0,0,0) )  # drop plot margins
+
+```
+
+### Analysis ###
+
+```{r}
+
+# Create buffers, render in same projection
+centroids_buff <- gBuffer(spgeom = centroids, width = .024, joinStyle="ROUND", byid = T)
+centroids_buff@proj4string
+spTransform(centroids_buff, CRS("+proj=longlat +datum=WGS84"))
+
+org_buff <- gBuffer(spgeom = pov_orgs, width = .024, joinStyle="ROUND", byid = T)
+centroids_buff@proj4string
+spTransform(org_buff, CRS("+proj=longlat +datum=WGS84"))
+
+
+# join data to centroid buffers
+centroids_buff$ID <- c(1:186)
+syr$ID <- c(1:186)
+org_buff$ID <- c(1:1095)
+pov_orgs$ID <- c(1:1095)
+
+c_buff <- merge( centroids_buff, syr@data, "ID", "ID" )
+test2 <- merge( org_buff, pov_orgs@data, "ID", "ID" )
+
+
+# Number of nonprofits within a 1.5 miles of middle of census tract.
+res <- poly.counts(pov_orgs, c_buff)
+setNames(res, c_buff$tract)
+syr$output <- setNames(res, c_buff$tract)
+
+# Number of nonprofits in each census tract
+res2 <- poly.counts(pov_orgs, syr)
+setNames(res2, syr$tract)
+syr$output2 <- setNames(res2, syr$tract)
+
+# Org way:
+# Number of nonprofit service catchment areas within a given census tract
+# df <- unknown.function(polygon, polygon)
+  # Not sure whether there a function that allows this kind of 
+
+### Maps to See spatially what is going on
+
+# change variables to be numeric. Required for leaflet 
+
+syr$porp_white <- as.numeric(as.character(syr$porp_white))
+syr$porp_m <- as.numeric(as.character(syr$porp_m))
+syr$mhh_income <- as.numeric(as.character(syr$mhh_income))
+class(syr$porp_m)
+class(syr$porp_white)
+class(syr$mhh_income)
+
+# Centroid buffer example
+syr_map <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
+  addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
+  addPolygons(data = syr, fillOpacity = 0, weight = 2) %>%
+  addCircles(data = pov_orgs, color= "red", opacity = 1.0) %>%
+  addPolygons(data = centroids_buff, fillOpacity = 0.3, weight = 2)
+
+syr_map %>% addProviderTiles(providers$CartoDB)
+
+# org_buff example
+syr_map2 <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
+  addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
+  addPolygons(data = syr, fillOpacity = 0, weight = 2) %>%
+  addPolygons(data = org_buff, color= "red", fillOpacity = 0.3, weight = 2) 
+
+syr_map2 %>% addProviderTiles(providers$CartoDB)
+
+# Scatterplots
+
+plot( syr$porp_white, syr$output, 
+      abline(lm(syr$output~syr$porp_white)),
+      main="Porportion White and # of NPOs per Census Tract",
+      xlab="Porportion White", ylab="# of NPOs per Census Tract",
+      col="blue", las = 1)
+
+plot( syr$mhh_income, syr$output, 
+      abline(lm(syr$output~syr$mhh_income)), 
+      main="Median HH Income and # of NPOs per Census Tract",
+      xlab="Median HH Income", ylab="# of NPOs per Census Tract",
+      col="blue", las = 1)
+
+```

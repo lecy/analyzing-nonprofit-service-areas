@@ -30,7 +30,7 @@ library( plyr )
 library( tigris )
 library( rgeos )
 library( repmis )
-
+library( maptools )
 
 ```
 
@@ -76,6 +76,9 @@ The data downloaded from the census API includes values in GEOID cells that need
 
 census_dat <- as.data.frame(sapply(acs_2015_syr,gsub,pattern="14000US",replacement=""))
 
+
+acs_2015_syr$GEOID2 <- gsub( acs_2015_syr$GEOID, pattern="14000US", replacement="" )
+
 ```
 
 ### Merge 3 spatial files
@@ -85,6 +88,10 @@ census_dat <- as.data.frame(sapply(acs_2015_syr,gsub,pattern="14000US",replaceme
 syr_msa <- union(Mad_county, On_county)
 syr_msa <- union(syr_msa, Osw_county)
 plot( syr_msa )
+
+
+syr_msa <- cbind( Mad_county, On_county )
+syr_msa <- cbind( syr_msa, Osw_county )
 
 ```
 
@@ -137,11 +144,18 @@ identical(test[['census_dat.GEOID']],test[['syr_msa.GEOID_full']])
 ```{r}
 
 # Merge data with MSA shp file
+
+syr_merged <- merge( syr_msa, census_dat, "GEOID_full", "GEOID" )
+
+
 syr_merged <- geo_join(syr_msa, census_dat, "GEOID_full", "GEOID")
 plot( syr_merged )
 title(main = "Syracuse MSA, NY")
 
 head(syr_merged)
+
+# Drop census tract 9900, water CT
+syr.test <- syr[!(syr$tract=="990000"),]
 
 ```
 

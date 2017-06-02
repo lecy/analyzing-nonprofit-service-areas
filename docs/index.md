@@ -14,6 +14,6 @@ This will allow you to develop your project narrative and share your results thr
 
 [Example here](Shapefiles_to_Geojson_Files.html)
 
-# Master HTML Page for total project
+# Maps and Analysis of nonprofits
 
 [Maps and Analysis](Maps_and_Analysis.html)

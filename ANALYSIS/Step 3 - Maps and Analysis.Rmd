@@ -38,6 +38,8 @@ library( raster )
 library( repmis )
 library( TSP )
 library( magrittr )
+library( lattice )
+library( GISTools )
 
 ```
 
@@ -205,51 +207,86 @@ syr_map2 %>% addProviderTiles(providers$CartoDB)
 # Create buffer, calculate number of nonprofit points around centroids
 
 centroids_buff <- gBuffer(spgeom = centroids, width = .024, joinStyle="ROUND",                             byid = T)
-
+centroids_buff@proj4string
 spTransform(centroids_buff, CRS("+proj=longlat +datum=WGS84"))
 
-# join census data to centroid buffer
+org_buff <- gBuffer(spgeom = pov_orgs, width = .024, joinStyle="ROUND",                             byid = T)
+centroids_buff@proj4string
+spTransform(org_buff, CRS("+proj=longlat +datum=WGS84"))
+
+spTransform(syr, CRS("+proj=longlat +datum=WGS84"))
+
+
+# join data to centroid buffers
 centroids_buff$ID <- c(1:186)
 syr$ID <- c(1:186)
+org_buff$ID <- c(1:1095)
+pov_orgs$ID <- c(1:1095)
 
+test <- merge( centroids_buff, syr@data, "ID", "ID" )
+test2 <- merge( org_buff, pov_orgs@data, "ID", "ID" )
 
-test.xy <- pov_orgs@data[c("lon", "lat")]
-coordinates( test.xy ) = ~lon+lat
+# Run an overlay
 
 CRS.new<-CRS("+proj=longlat +datum=WGS84")
-proj4string(centroids_buff) <- CRS.new 
+proj4string(test) <- CRS.new 
 proj4string(pov_orgs) <- CRS.new
 
-over <- over(pov_orgs,  centroids_buff)
+over2 <- over(pov_orgs, test) 
 
-Table(over$tract)
-save table as new var in syr
+syr$output <- table(over$tract)
+
+# Alternate
+library(GISTools)
+
+# Number of nonprofits within a 1.5 miles of middle of census tract.
+res <- poly.counts(pov_orgs, test)
+setNames(res, test$tract)
+syr$output2 <- setNames(res, test$tract)
+
+# Number of nonprofits in each census tract
+res <- poly.counts(pov_orgs, syr)
+setNames(res, syr$tract)
+syr$output3 <- setNames(res, syr$tract)
+
+# Org way:
+# Number of nonprofit service catchment areas within a given census tract
+
+
+bg_num <- 1*bg
+ 
+ 
+point.in.poly
 
 
 # other option?
 # syr$test <- 1:nrow(over_clean)
 
-plot(centroids_buff)
-points( pov_orgs, col="darkorange4", pch= 1 )
+plot(syr) %>%
+plot(centroids_buff) 
+points( pov_orgs, col="darkorange4", pch= 20 )
 
 
-pal2 <- colorNumeric(
-  palette = "Blues",
-  domain = syr$mhh_income )
-
+# Centroid buffer example
 syr_map2 <- leaflet() %>%
   addTiles() %>%  # Add default OpenStreetMap map tiles
   addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
   addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
-  addPolygons(data = syr, fillOpacity = 0.3, weight = 2,
-              color = ~pal2(syr$mhh_income)) %>%
+  addPolygons(data = syr, fillOpacity = 0, weight = 2) %>%
   addCircles(data = pov_orgs, color= "red", opacity = 1.0) %>%
-  addCircles(data = centroids, color= "black", opacity = 1.0) %>%
   addPolygons(data = centroids_buff, fillOpacity = 0.3, weight = 2)
              
 syr_map2 %>% addProviderTiles(providers$CartoDB)
 
-# Not quite sure what is needed. How do I add up values for every centroid from the overlay?
+# org_buff example
+syr_map2 <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
+  addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
+  addPolygons(data = syr, fillOpacity = 0, weight = 2) %>%
+  addPolygons(data = org_buff, color= "red", fillOpacity = 0.3, weight = 2)
+             
+syr_map2 %>% addProviderTiles(providers$CartoDB)
 
 # Similar to above, but combines over and removing NAs into one step
 # pov_orgs_t <- pov_orgs 
@@ -268,7 +305,13 @@ syr_map2 %>% addProviderTiles(providers$CartoDB)
   # Number of nonprofits location by census tract income or race
     # Race
     # Income
-  
+
+
+
+
+xyplot(output2 ~ porp_white, data = syr@data)
+xyplot(output2 ~ mhh_income, data = syr@data)
+
 ```
 
 
