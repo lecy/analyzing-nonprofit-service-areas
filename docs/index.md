@@ -1,23 +1,43 @@
-# Project Name
+# Analyzing Nonprofit Service Areas
 
-Here is some text describing your project.
+## Project Overview
 
-You can link to other project files, add images, and create tables.
+This project sets out to show how spatial analysis can provide better understanding of nonprofit service areas in metropolitan areas of the United States. IRS data on nonprofit organizations and census tract information from the U.S. census is combined to explore the environmental effects on where nonprofit organizations locate and how the presence of nonprofits is related to poverty. We will focus on one specific context, Syracuse New York, and then expand the observation to most populated areas in the United States.
 
-This will allow you to develop your project narrative and share your results through HTML files that link back to your code and the underlying data, making the project fully reproducible.
+A variety of techniques were used to create this project. Here are a few valuable techniques used: Geocoding an entire dataset with one looped function, importing American Community Survey data and U.S. census shapefiles right into R without spending time going through convoluted websites, combining shapefiles into one  shapefile in the form of a geojson file, how to use interactive maps, and run basic scatterplots, correlations, and regressions in R. In this sense, this project also highlights many valuable tools available in R to create a database of useful data on nonprofits, wrangle data, and run simple analysis. All files necessary to run code are located in this project GitHub repository, allowing anyone to use the data and code for their own purposes without needing to collect data or change file locations. 
 
-# Analysis example
+Four steps listed below outline the process of running this analysis. First, it will be shown how the main data was downloaded, geocoded, cleaned, and saved. The second step highlights how to download important shapefiles and convert them into single geojson files. Third, maps and analysis show the visual locations of nonprofits in the Syracuse, New York metropolitan area and simple scatterplots and regressions reveal the relationships between environmental factors and nonprofit locations. Finally, all prior code will be used for an extended analysis that goes beyond the Syracuse MSA to observe how location of nonprofits are affected in the five most populated areas in the U.S: New York, Los Angeles, Chicago, Dallas-Fort Worth, and Houston. 
 
-[Example](Analysis_example.html) 
+The hope is that this project will provide nonprofit researchers with relevant data to further the understanding of how nonprofits help areas in poverty in the U.S. In addition, this project may also act as a tutorial, providing beginners to R with many techniques which may be applied in other settings.
 
-# Download Syracuse data and Census data, clean files
+# Step 1 - Download Syracuse Data and Census Data
+
+This preliminary step provides the code of how data in the ASSETS folder on GitHub was downlowded and changed for the project.
 
 [Download and clean files](Download_and_Clean_Data.html)
 
-# Converting shapefiles to geojson files
+# Step 2- Converting Shapefiles to Geojson Files
 
-[Shapefile](Shapefiles_to_Geojson_Files.html)
+Shows how U.S. Census shapefiles can be downloaded directly from the Census to R. Additionally, it shows how to merge a data frame with shapefiles and convert shapefiles into geojson files.
 
-# Maps and Analysis of nonprofits
+[Shapefiles](Shapefiles_to_Geojson_Files.html)
 
-[Maps and Analysis](Maps_and_Analysis.html)
+# Step 3 Maps and Analysis of Nonprofits
+
+Step 3 offers both visuals of how to map spatial data and how to run basic analysis in R. A discussion of the results of nonprofits in the Syracuse MSA are included in this step.
+
+[Maps and analysis](Maps_and_Analysis.html)
+
+# Analysis Across Top 5 Populated U.S. Metropolitan Areas
+
+This final step combines code from all other steps to observe the effects on nonprofit location in New York, Los Angeles, Chicago, Dallas-Fort Worth, and Houston. A discussion about the code and findings is found below.
+
+[Extended analysis](exended_analysis.html)
+
+# Conclusion
+
+This project seeks to offer tools and techniques available in R programming software to improve undestanding of the spatial nature of nonprofit organizations servicing impovished populations. It provides an example of how to build a research database located online on GitHub for nonprofit research. Finally, it shows how to download open data, wrangle it, and use it in an analysis example. 
+
+# Acknowledgements
+
+This project was made possible by [Matthew McKnight](https://github.com/mlmcknight) under [Jesse Lecy's](https://github.com/lecy) supervision.

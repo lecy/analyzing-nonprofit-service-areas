@@ -1,7 +1,7 @@
 ---
 title: "Shapefiles to geojson files"
 author: "Matt McKnight"
-date: "May 16, 2017"
+date: "June 13, 2017"
 output:
   html_document:
     df_print: paged
@@ -16,7 +16,8 @@ output:
 
 # SHAPEFILES TO GEOJSON FILES
 
-Geojson files are useful to use in analysis because they combine all the files necessary for spatial data into one file. Simple but effective. This tutorial will show how US census data for this project was downloaded, merged, and converted into geojson files.
+Geojson files are useful to use in analysis because they combine all the files necessary for spatial data into one file. Simple yet versatile. Step 2 will show how US census data for this project was downloaded, merged, and converted into geojson files.
+
 ```{r setup, include=FALSE}
 
 # global chunk options
@@ -32,12 +33,12 @@ library( rgeos )
 library( repmis )
 library( maptools )
 
-
 ```
 
 
 # DOWNLOAD SHAPEFILES 
-### Begin by using functions from the tigris package to directly download selected census tract shapefiles.
+
+Begin by using functions from the tigris package to directly download selected census tract shapefiles. Using this package only requires using a function to download shapefiles into R, making it very simple to use.
 
 ```{r}
 
@@ -57,153 +58,116 @@ Osw_county <- na.omit(Osw_county)
 
 ```
 
-
 # MERGE DATA
-### Add Syracuse MSA census tract data to census tract shape files
+
+Add Syracuse MSA census tract data to census tract shape files
 
 ```{r}
 
 # Read in census data
-source_data("https://github.com/lecy/analyzing-nonprofit-service-areas/blob/master/DATA/acs_2015_syr.Rda?raw=true")
+
+source_data("https://github.com/lecy/analyzing-nonprofit-service-areas/blob/master/ASSETS/acs_2015_syr.Rda?raw=true")
 
 ```
 
-### Clean census data GEOID
+## Clean census data GEOID
 
 The data downloaded from the census API includes values in GEOID cells that need to be removed prior to merging with shapefiles.
 
 ```{r}
 
-# Search term: deleting part of charactor in factor variable in r
-# http://stackoverflow.com/questions/5487164/r-how-to-replace-parts-of-variable-strings-within-data-frame 
+head(acs_2015_syr$GEOID)
 
-acs_2015_syr$GEOID2 <- gsub( acs_2015_syr$GEOID, pattern="14000US", replacement="" )
+acs_2015_syr$GEOID <- gsub(acs_2015_syr$GEOID, pattern="14000US", replacement="")
+census_dat <- acs_2015_syr
 
-# census_dat <- as.data.frame(sapply(acs_2015_syr,gsub,pattern="14000US",replacement=""))
-
-
+head(acs_2015_syr$GEOID)
 ```
 
-### Merge 3 spatial files
+## Merge 3 spatial files
+
+When the shapefiles are joined, they do not create a full list variable of all GEOIDs. This step creates one GEOID variabe combined from all three shapefiles.
 
 ```{r}
 
+# Spatial join
 syr_msa <- union(Mad_county, On_county)
 syr_msa <- union(syr_msa, Osw_county)
 
-syr_msa <- cbind( Mad_county, On_county )
-syr_msa <- cbind( syr_msa, Osw_county )
+# Create complete 
 
-plot( syr_msa )
-
-
-```
-
-
-
-### Clean census data GEOID to match shapefile GEOID
-
-Depending on what year is downloaded, the GEOIDs from census attribute data may not match with GEOID values in TIGER shapefiles. Below shows a procedure that may be used to ensure the values in both sets of data are identical and ready to be merged.
-```{r}
-# Combine 3 GEOID variables in syr_msa in to one column for merge
-
-# Example
-
-x <- c(1,1,1,NA,NA,NA,NA,NA,NA)
-y <- c(NA,NA,NA,1,1,1,NA,NA,NA)
-z <- c(NA,NA,NA,NA,NA,NA,1,1,1)
-df <- data.frame(x,y,z)
-# unite isn't quite what we are looking for because it adds the NAs to the single created column.
-unite(df, a, x, y, z, sep = "", remove = FALSE)
-#But, a trick can be applied by dropping NAs:
-df <- df[!is.na(df)]
-# Values become a single vector that can be added back to a data.frame
-df
-
-# Actual 
 GEOID <- data.frame(syr_msa$GEOID.1, syr_msa$GEOID.2, syr_msa$GEOID)
 head(GEOID)
 GEOID_tot <- GEOID[!is.na(GEOID)]
-
 GEOID$GEOID_tot <- GEOID_tot
-GEOID_fixed <- GEOID_tot[c(
-1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128, 129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148, 149,150,151,16,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168, 169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186
- )]
+head(GEOID)
 
-GEOID$GEOID_fixed <- GEOID_fixed
+syr_msa$GEOID_full <- GEOID_tot
 
-syr_msa$GEOID_full <- GEOID$GEOID_fixed
+# syr_msa <- cbind( Mad_county, On_county )
+# syr_msa <- cbind( syr_msa, Osw_county )
+# Does not work, Error: arguments imply differing number of rows: 16, 140
 
-#check to see if census GEOID is the same as shapefile MSA GEOID_full column:
-test <- data.frame(census_dat$GEOID, syr_msa$GEOID_full)
-a <- as.vector(test$census_dat.GEOID)
-b <- as.vector(test$syr_msa.GEOID_full)
-a <- sort(a)
-b <- sort(b)
-test <- data.frame(a,b)
-identical(test[['census_dat.GEOID']],test[['syr_msa.GEOID_full']])
+plot(syr_msa)
+
 ```
 
+## Merge census attribute data with shapefile data
 
-### Merge census attribute data with shapefile data
+Merge Syracuse MSA data from [Step 1](Download_and_Clean_Data.html). Occasionally, some census tract may need to be dropped because they only cover bodies of water with no other census information. In this MSA, one body of water census tract is deleted from the data. 
 
 ```{r}
 
 # Merge data with MSA shp file
 
-syr_merged <- merge( syr_msa, census_dat, "GEOID_full", "GEOID" )
+syr_merged <- merge(syr_msa, census_dat, 
+                    by.x = "GEOID_full", by.y = "GEOID")                      
 
+plot(syr_merged)
+title(main = "Syracuse MSA, NY")
+head(syr_merged)
+nrow(syr_merged)
 
-# syr_merged <- geo_join(syr_msa, census_dat, "GEOID_full", "GEOID")
+# Drop census tract 9900, water census tract in Oswego county
+syr_merged_clean <- syr_merged[!(syr_merged$tract=="990000"),]
+nrow(syr_merged)
 
-plot( syr_merged )
+plot(syr_merged_clean)
 title(main = "Syracuse MSA, NY")
 
-head(syr_merged)
-
-# Drop census tract 9900, water CT
-syr.test <- syr[!(syr$tract=="990000"),]
-
 ```
-
-
-
-
-
-
 
 
 # GEOJSON FILES
 
-### Convert shapefiles to geojson files for the Syracuse MSA
+Convert shapefiles to geojson files for the Syracuse MSA. This function also saves the created geojson file to a chosen folder. 
 
 ```{r}
-geojson_write( syr_merged, geometry="polygon", file="syr_merged.geojson" )
+geojson_write(syr_merged_clean, geometry="polygon", file="../ASSETS/syr_merged.geojson")
 
 ```
 
-
-### Create create shapefile with centroids for every census tract and convert to geojson format
+Create a shapefile with centroids for every census tract and convert to geojson format. Save file.
 
 ```{r}
 
-syr_merged_cen = gCentroid(syr_merged,byid=TRUE)
+syr_merged_cen = gCentroid(syr_merged_clean, byid=TRUE)
 
-geojson_write( syr_merged_cen, geometry="point", file="syr_merged_cen.geojson" )
+geojson_write(syr_merged_cen, geometry="point", file="../ASSETS/syr_merged_cen.geojson")
 
 ```
 
-
-### Drop missing values, convert shapefiles for poverty organizations in a geojson file
-
+Load poverty nonprofit data. Drop missing values, convert shapefiles for poverty organizations in a geojson file. Save file.
 
 ```{r}
 
-load("../DATA/pov_orgs_gps.Rda")
+load("../ASSETS/pov_orgs_gps.Rda")
+
+# Missing values are dropped to insure smooth transformation into a spatial object
 
 pov_orgs_gps_nona <- na.omit(pov_orgs_gps)
 
-geojson_write( pov_orgs_gps_nona, geometry="point", file="../SHAPEFILES/pov_orgs.geojson" )
+geojson_write(pov_orgs_gps_nona, geometry="point", file="../ASSETS/pov_orgs.geojson")
 
 ```
  

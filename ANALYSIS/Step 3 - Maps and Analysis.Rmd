@@ -1,7 +1,7 @@
 ---
 title: "Maps and Analysis"
 author: "Matt McKnight"
-date: "May 11, 2017"
+date: "June 12, 2017"
 output:
   html_document:
     df_print: paged
@@ -14,6 +14,9 @@ output:
   pdf_document: default
 ---
 
+# Introduction
+
+This section details an example of how to create maps and analysis to analyze service catchment areas for the Syracuse MSA in upstate New York.
 
 ```{r setup, include=FALSE}
 
@@ -40,32 +43,39 @@ library( TSP )
 library( magrittr )
 library( lattice )
 library( GISTools )
+library( pander )
+library( xtable )
+library( RCurl )
+library( stargazer )
+library( lmtest )
+library( car )
 
 ```
 
 
 # MAPS
 
-## Load in Census Shapefiles from GitHub
+## Load census shapefiles from GitHub
 
-### Note: To see how these shapefiles were created, check [Shapefiles to Geojson Files](Shapefiles_to_Geojson_Files.hmtl) HTML file  for more information.
+Data can be downloaded directly from GitHub into R. In this case, we are downloading geojson files created in step 2. (Note: To see how these shapefiles were created, check [Shapefiles to Geojson Files](Shapefiles_to_Geojson_Files.hmtl) HTML file  for more information). 
 
+After data is downloaded, the geojson files need to be converted to sp projections.
 
-```{r}
+```{r, echo=FALSE, results='hide'}
 
-file.url <- "https://raw.githubusercontent.com/lecy/analyzing-nonprofit-service-areas/master/SHAPEFILES/syr_merged.geojson"
+file.url <- "https://raw.githubusercontent.com/lecy/analyzing-nonprofit-service-areas/master/ASSETS/syr_merged.geojson"
 
 syr <- geojson_read( file.url, method="local", what="sp")
 
 spTransform(syr, CRS("+proj=longlat +datum=WGS84"))
 
-file.url <- "https://raw.githubusercontent.com/lecy/analyzing-nonprofit-service-areas/master/SHAPEFILES/syr_merged_cen.geojson"
+file.url <- "https://raw.githubusercontent.com/lecy/analyzing-nonprofit-service-areas/master/ASSETS/syr_merged_cen.geojson"
 
 centroids <- geojson_read( file.url, method="local", what="sp")
 
 spTransform(centroids, CRS("+proj=longlat +datum=WGS84"))
 
-file.url <- "https://raw.githubusercontent.com/lecy/analyzing-nonprofit-service-areas/master/SHAPEFILES/pov_orgs.geojson"
+file.url <- "https://raw.githubusercontent.com/lecy/analyzing-nonprofit-service-areas/master/ASSETS/pov_orgs.geojson"
 
 pov_orgs <- geojson_read( file.url, method="local", what="sp")
 
@@ -74,25 +84,39 @@ spTransform(pov_orgs, CRS("+proj=longlat +datum=WGS84"))
 par( mar=c(0,0,0,0) )  # drop plot margins
 
 ```
+```{r}
+
+# Print spatial projections
 
 
-##Check shapefiles with plots
+print("syr")
+syr@proj4string
+print("centroids")
+centroids@proj4string
+print("pov_orgs")
+pov_orgs@proj4string
+
+```
+## Check shapefiles with plots
+
+You can check how the data looks simply with the plot function. Census tracts of the Syracuse MSA are shown in black (default color) with nonprofit locations in red.
 
 ```{r}
 
-plot( syr )
-plot( centroids, col="black", pch = 20, add = T)
-
-plot( syr )
-plot( centroids, col="black", pch = 20, add = T )
-plot( pov_orgs, col="red", lwd = 2, add = T )
+plot(syr)
+plot(pov_orgs, col="red", lwd = 3, pch = 20, add = T)
 
 names(syr)
 
 ```
+<br>
+Here we notice a strong concentration of nonprofit organizations in downtown Syracuse and more spread out patterns in suburbs of Syracuse. It is somewhat difficult on the basic plot to understand the areas outside of downtown Syracuse where nonprofits concentrate in small groups. Without an underlying basemap it can be hard to disinquish where more small towns are located in the MSA. Besides adding a static baselayer map to the plot function, interactive maps found in the leaflet package offer a zoom-feature way to understand what is going on with nonprofit locations outside the city of Syracuse
 
+## Create Leaflet maps
 
-### Create zoom enabled map of Syracuse, NY
+The leaflet package provides interactive maps that overlay spatial objects in R. This can make it easier to zoom in and out of areas of interest to notice the placement of service catchment areas in a given MSA. Leaflet includes [different styles](https://leaflet-extras.github.io/leaflet-providers/preview/) of maps that can match well with the type of the data in use or for better aesthetic appeal.
+
+Here, we begin by creating a zoom enabled map of Syracuse, NY by providing the leaflet function with the center lat-long coordinates for Syracuse. Any coordinates may be placed into this function to center the map around a specific coordinate. 
 
 ```{r}
 map <- leaflet() %>%
@@ -103,75 +127,48 @@ map %>% addProviderTiles(providers$CartoDB)
 
 
 ```
-
-### Set the view of the Syracuse MSA
-
-```{r}
-
-
-
-syr_map <- leaflet() %>%
-  addTiles() %>%  # Add default OpenStreetMap map tiles
-  addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
-  addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
-  addPolygons(data = syr, fillOpacity = 0.3) %>%
-  addCircles(data = pov_orgs) %>%
-  addCircles(data = centroids)
-
-syr_map %>% addProviderTiles(providers$CartoDB)  
-
-
-              
-```
-
-### Edit color format of polygons and data points
+<br>
+Next, the view is set to the Syracuse MSA by adding a zoom out argument. Add census tract borders to the map.
 
 ```{r}
 
 
-syr_map <- leaflet() %>%
+syr_map1 <- leaflet() %>%
   addTiles() %>%  # Add default OpenStreetMap map tiles
   addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
   addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
-  addPolygons(data = syr, fillOpacity = 0.3, weight = 2) %>%
-  addCircles(data = pov_orgs, color= "red", opacity = 1.0) %>%
-  addCircles(data = centroids, color= "black", opacity = 1.0)
+  addPolygons(data = syr, fillOpacity = 0.3, weight = 2)
 
-syr_map %>% addProviderTiles(providers$CartoDB)  
+
+syr_map1 %>% addProviderTiles(providers$CartoDB)  
 
 ```
-
-### Adding census tract information to map
+<br>
+This map only shows the census tract borders. We can create a choropleth map by highlighting a variable of interest which will show its distribution. The two maps below highlight two characteristics: racial diversity and income level.
 
 ```{r}
 
 # change variables to be numeric
 
-syr$porp_white <- as.numeric(as.character(syr$porp_white))
-syr$porp_m <- as.numeric(as.character(syr$porp_m))
+syr$prop_white <- as.numeric(as.character(syr$prop_white))
+syr$prop_m <- as.numeric(as.character(syr$prop_m))
 syr$mhh_income <- as.numeric(as.character(syr$mhh_income))
-class(syr$porp_m)
-class(syr$porp_white)
-class(syr$mhh_income)
 
 # By race
 
 pal <- colorNumeric(
   palette = "Blues",
-  domain = syr$porp_m )
+  domain = syr$prop_m )
 
 
-syr_map <- leaflet() %>%
+syr_map2 <- leaflet() %>%
   addTiles() %>%  # Add default OpenStreetMap map tiles
   addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
   addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
   addPolygons(data = syr, fillOpacity = 0.3, weight = 2,
-              color = ~pal(syr$porp_m)) %>%
-  addCircles(data = pov_orgs, color= "red", opacity = 1.0) %>%
-  addCircles(data = centroids, color= "black", opacity = 1.0) 
+              color = ~pal(syr$prop_m)) 
 
-
-syr_map %>% addProviderTiles(providers$CartoDB)
+syr_map2 %>% addProviderTiles(providers$CartoDB)
 
 
 # By Income level
@@ -181,145 +178,395 @@ pal2 <- colorNumeric(
   domain = syr$mhh_income )
 
 
-syr_map2 <- leaflet() %>%
+syr_map3 <- leaflet() %>%
   addTiles() %>%  # Add default OpenStreetMap map tiles
   addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
   addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
   addPolygons(data = syr, fillOpacity = 0.3, weight = 2,
-              color = ~pal2(syr$mhh_income)) %>%
-  addCircles(data = pov_orgs, color= "red", opacity = 1.0) %>%
-  addCircles(data = centroids, color= "black", opacity = 1.0) 
+              color = ~pal2(syr$mhh_income))
 
-
-syr_map2 %>% addProviderTiles(providers$CartoDB)
+syr_map3 %>% addProviderTiles(providers$CartoDB)
 
 
 ```
+<br>
+The first map shows in the darker areas that, unsurpisingly, most of the minority population within the Syracuse MSA lives in the city of Syracuse instead of surrounding towns and suburbs. The darker areas on the second map note higher income census tracts. The city is rather light, suggesting lower income levels in the downtown areas of Syracuse. The light square area just south of the city of Syracuse is the Onondaga Indian Reservation, a census tract with a higher level of minority residnts but lower household income.
 
-# ANALYSIS
+So where do nonprofits locate in this MSA? And where are service catchment areas in relation to where residents live?
 
-## Create Service Catchment Areas
+## Create service catchment areas
 
+Peck 2008 suggests that a nonprofit provides services to census tract if it is within 1.5 miles from the center of the respective tract. This is not an exact measurment for where actual services are provided. That would require data on all services provided by all 509 nonprofits within the Syracuse MSA. Instead, the 1.5 miles radius around the centroid of a census tract is used as approximate proxy for the extent to which citizens in need may reasonably access services that may benefit them. 
 
-```{r eval=FALSE}
+Peck's prior research (2008) suggests that the number of nonprofits serving a census tract can be measured by how many nonprofit services reach the centroid of a census tract. Yet, this can be a problematic practice once analysis extends to census tracts which are not located in inner cities. Census tracts get larger outside of cities because tract size are determined by population size not geographical size. The Census tries to create tracts of between 1,200-8,000 [residents](https://www.census.gov/geo/reference/gtc/gtc_ct.html). In rural area, it requires more geographical space to include the desired amount of residents, hence census tracts grow in geographic size the more rural it is located in an MSA.
 
+An alternate analysis to this approach is to count the number of nonprofit service catchment areas, at a distance of 1.5 miles, that have any part within a respective census tract, or neighborhing tract. It may not cover the tract as far as the centroid, like what is done in the traditional approach, but this inclusive approach is more useful for analyzing census tracts outside highly urbanized areas and yet minimally changes analysis within city tracts. It is more useful for more rural census tracts because it allows inclusion of nonprofits providing services within rural tracts without having to account for the centroid. In addition, this approach also allows nonprofits to be accounted for in more than one census tract when their service area crosses tract boundaries. This approach resolves the concern of accounting for nonprofits located near the border of a census tract that may be realistically servicing both tracts. Since census tracts in cities are much smaller, nonprofit service areas will already capture multiple census tracts. Though this alternate approach is more inclusive of nonprofits, extending the range from past research may take into account nonprofits serving rural populations. 
 
-# Create buffer, calculate number of nonprofit points around centroids
+The two approachs will be shown together below to understand the spatial differences between the two and why the alternative approach may be a more useful approach.
 
-centroids_buff <- gBuffer(spgeom = centroids, width = .024, joinStyle="ROUND",                             byid = T)
+First, two different buffers, one around each centroid and another around each nonprofit organization, are created to show the different approaches on maps.
+
+```{r, echo=FALSE, results='hide'}
+
+# Create buffers, render in same projection
+centroids_buff <- gBuffer(spgeom = centroids, width = .024, joinStyle="ROUND", byid = T)
 centroids_buff@proj4string
 spTransform(centroids_buff, CRS("+proj=longlat +datum=WGS84"))
 
-org_buff <- gBuffer(spgeom = pov_orgs, width = .024, joinStyle="ROUND",                             byid = T)
+org_buff <- gBuffer(spgeom = pov_orgs, width = .024, joinStyle="ROUND", byid = T)
 centroids_buff@proj4string
 spTransform(org_buff, CRS("+proj=longlat +datum=WGS84"))
 
-spTransform(syr, CRS("+proj=longlat +datum=WGS84"))
-
 
 # join data to centroid buffers
-centroids_buff$ID <- c(1:186)
-syr$ID <- c(1:186)
-org_buff$ID <- c(1:1095)
-pov_orgs$ID <- c(1:1095)
+centroids_buff$ID <- c(1:185)
+syr$ID <- c(1:185)
+org_buff$ID <- c(1:506)
+pov_orgs$ID <- c(1:506)
 
-test <- merge( centroids_buff, syr@data, "ID", "ID" )
+c_buff <- merge( centroids_buff, syr@data, "ID", "ID" )
 test2 <- merge( org_buff, pov_orgs@data, "ID", "ID" )
 
-# Run an overlay
+```
+<br>
+Next, two different functions count the number of organizations which are located  within the buffers of the two approaches, the a centroid buffer and nonprofit buffer, in respective census tracts. The poly.counts function from the GISTools package counts the number of points within a given polygon, in this case the centroid buffer. The second function, gIntersects, creates a buffer using the rgeos package. A different function than poly.counts is required here becuase the alternative approach requires an overlay with polygon to polygon, not point to polygon.  
 
-CRS.new<-CRS("+proj=longlat +datum=WGS84")
-proj4string(test) <- CRS.new 
-proj4string(pov_orgs) <- CRS.new
+```{R}
 
-over2 <- over(pov_orgs, test) 
+# 1) Number of nonprofits within a 1.5 miles of middle of census tract.
+res <- poly.counts(pov_orgs, c_buff)
+syr$output1 <- setNames(res, c_buff$tract)
 
-syr$output <- table(over$tract)
+# 2) Number of nonprofits in each census tract
+res2 <- poly.counts(pov_orgs, syr)
+syr$output2 <- setNames(res2, syr$tract)
 
-# Alternate
-library(GISTools)
-
-# Number of nonprofits within a 1.5 miles of middle of census tract.
-res <- poly.counts(pov_orgs, test)
-setNames(res, test$tract)
-syr$output2 <- setNames(res, test$tract)
-
-# Number of nonprofits in each census tract
-res <- poly.counts(pov_orgs, syr)
-setNames(res, syr$tract)
-syr$output3 <- setNames(res, syr$tract)
-
-# Org way:
+# 3) Org way:
 # Number of nonprofit service catchment areas within a given census tract
 
+inter_npo <- gIntersects(org_buff, syr, byid=TRUE)
 
-bg_num <- 1*bg
- 
- 
-point.in.poly
+# change logical matrix to an integer matrix
+
+inter_npo2 <- inter_npo + 0
+
+# Convert matrix into a data frame 
+
+inter_npo3 <- as.data.frame(inter_npo2)
+
+# Combine all columns into one additive vector
+
+tot_col <- apply(inter_npo3, 1, sum)
+
+# add number of orgs vector to census data
+
+syr$output3 <- tot_col
+
+# header info
+print("centroid buffer = Output1")
+print("number of orgs per census tract = Output2")
+print("org buffer = Output3")
+
+head(syr[,75:77])
+```
+<br>
+Now that the two buffers are created, the two approaches to counting the number of nonprofits in a census tract can be visualized using leaflet maps.
 
 
-# other option?
-# syr$test <- 1:nrow(over_clean)
+```{r}
 
-plot(syr) %>%
-plot(centroids_buff) 
-points( pov_orgs, col="darkorange4", pch= 20 )
+### Maps to See spatially what is going on
 
+# change variables to be numeric. Required for leaflet 
+
+syr$prop_white <- as.numeric(as.character(syr$prop_white))
+syr$prop_m <- as.numeric(as.character(syr$prop_m))
+syr$mhh_income <- as.numeric(as.character(syr$mhh_income))
 
 # Centroid buffer example
-syr_map2 <- leaflet() %>%
+syr_map4 <- leaflet() %>%
   addTiles() %>%  # Add default OpenStreetMap map tiles
   addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
   addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
   addPolygons(data = syr, fillOpacity = 0, weight = 2) %>%
   addCircles(data = pov_orgs, color= "red", opacity = 1.0) %>%
   addPolygons(data = centroids_buff, fillOpacity = 0.3, weight = 2)
-             
-syr_map2 %>% addProviderTiles(providers$CartoDB)
+
+syr_map4 %>% addProviderTiles(providers$CartoDB)
+
+
+```
+<br>
+The first map shows the census tract centroid buffer approach. Upon investigating the first map, it can be seen that as census tracts become more rural, the 1.5 mile buffer is no longer a value tool to account for nonprofits that are located within or around the census tract. A specific example of this analytical limitation can be seen when we zoom into the small resort town of Skaneateles on the periphery of the MSA. 
+
+```{r}
+
+# Centroid buffer example, close up of Skaneateles
+syr_map5 <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addTiles() %>% setView(-76.4291, 42.9470, zoom = 11) %>%
+  addMarkers(lng=-76.4291, lat=42.9470, popup="Skaneateles, NY") %>%
+  addPolygons(data = syr, fillOpacity = 0, weight = 2) %>%
+  addCircles(data = pov_orgs, color= "red", opacity = 1.0) %>%
+  addPolygons(data = centroids_buff, fillOpacity = 0.3, weight = 2)
+
+syr_map5 %>% addProviderTiles(providers$CartoDB)
+
+```
+<br>
+Here, the centroids buffers in these rural census tracts do not account for any nonprofits within their census tracts because the buffers are not large enough. In addition, this approach does not account for nonprofits servicing multiple census tracts. Continuing from the example, the town of Skaneateles straddles two different census tracts. Most poverty servicing nonprofits also exist on the border between two tracts and therefore in reality probably serve both census tracts. 
+
+The alternate approach considers this limitation by accounting for nonprofit organizations serving multiple census tracts along the borders of census tracts. Here are the nonprofit buffers for the Syracuse MSA, in red:
+
+
+```{r}
 
 # org_buff example
-syr_map2 <- leaflet() %>%
+syr_map6 <- leaflet() %>%
   addTiles() %>%  # Add default OpenStreetMap map tiles
   addTiles() %>% setView(-76.1474244, 43.0481221, zoom = 9) %>%
   addMarkers(lng=-76.1474244, lat=43.0481221, popup="Downtown Syracuse, NY") %>%
   addPolygons(data = syr, fillOpacity = 0, weight = 2) %>%
-  addPolygons(data = org_buff, color= "red", fillOpacity = 0.3, weight = 2)
-             
-syr_map2 %>% addProviderTiles(providers$CartoDB)
+  addPolygons(data = org_buff, color= "red", fillOpacity = 0.3, weight = 2) 
 
-# Similar to above, but combines over and removing NAs into one step
-# pov_orgs_t <- pov_orgs 
-# pov_orgs_t$test <- pov_orgs[centroids_buff,]
+syr_map6 %>% addProviderTiles(providers$CartoDB)
+
 ```
+<br>
+It can be seen in this map that the nonprofit buffers more accurately resemble nonprofit service catchment areas by census tract. In the larger geographic census tracts, the nonprofit buffers will be counted regardless of how close they are to the center of any given tract. In addition, if the buffer crosses a border into any other census tract, that nonprofit will be considered as serving those other census tracts as well.
 
-### Analysis continued 
+A main limitation to the alternate approach is that it considers nonprofits servicing another census tract regardless of how little of the buffer crosses into another tract. This means that some census tracts will artifically count nonprofits that may not in reality service that census tract. However, the alternative approach makes up for this limitation by accounting for the higher number of nonprofits that border two or more census tracts.
+
+Let's return Skeneateles example, but with the nonprofit buffer.
 
 ```{r}
-# Poportion of census tract that are high/low diversity
-  # number of nonprofits by type in high/low racially diverse areas
-  # number of nonprofits by type in low/high income census tracts
 
+# Centroid buffer example, close up of Skaneateles
+syr_map7 <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addTiles() %>% setView(-76.4291, 42.9470, zoom = 11) %>%
+  addMarkers(lng=-76.4291, lat=42.9470, popup="Skaneateles, NY") %>%
+  addPolygons(data = syr, fillOpacity = 0, weight = 2) %>%
+  addPolygons(data = org_buff, color= "red", fillOpacity = 0.3, weight = 2) 
 
-# Corr analysis between nonprofit access and census tract attributes
-  # Number of nonprofits location by census tract income or race
-    # Race
-    # Income
-
-
-
-
-xyplot(output2 ~ porp_white, data = syr@data)
-xyplot(output2 ~ mhh_income, data = syr@data)
+syr_map7 %>% addProviderTiles(providers$CartoDB)
 
 ```
+<br>
+Now the buffers account for nonprofits servicing both census tracts that border the town of Skaneateles, whereas in the other analytical approach none of these organizations are accounted for. The limitation of this approach is also shown in this map. In the census tract along the northern border of Skaneateles, there is a nonprofit buffer at the top right edge of the tract that barely crosses into the tract from a tract further north. Though nonprofit buffers that barely cross into another census tract may be counted, the trade-off with accounting for nonprofits that exist along tract borders is more accurate than the tradtional centroid approach when considering more rural census tracts.
+
+# ANALYSIS
+
+Peck (2008) found that poverty nonprofits are more likely to locate in ares with higher levels of poverty, minority residents, and renter-occupied housing in 2000 in the Phoenix MSA (p. 146). In addition, Peck observed how the number of poverty nonprofits per census tract affected poverty, controlling for other factors. Change in povery from 1990-2000 reported only education and rented housing as significantly affecting poverty change. The study concludes that even though poverty serving nonprofits located in neighborhoods that need the services, presence of nonprofits do not improve poverty in a statistically substantive way. 
+Adapting work from Peck 2008, five environmental factors that may affect the location of services provided are: race, education, income, status of living (rented housing) and the proportion of poverty within a census tract. These five factors may, or may not, drive the demand for more nonprofit services to be utilized in a certain area within MSAs.
+
+By using the nonprofit locations as buffers, more realistic service catchment areas may be utilized for analysis that account for nonprofits servicing census tracts both in urban and rural census tracts. Below, findings for the relationship between environmental factors and nonprofit locations will be presented using scatterplots, correlations, and regression analysis.
+
+## Scatterplots
+
+Five scatterplots showing the relationship between environmental factors and number of poverty nonprofits per census tract are created below. Using a fitted linear line in each scatterplot shows the directional relationship between variables.
+
+```{r}
+# Scatterplots
 
 
-## Final section: Account for all urban census tracts in 25 cities
+plot( syr$prop_white, syr$output3, 
+      abline(lm(syr$output3~syr$prop_white)),
+      main="Proportion White and # of NPOs per Census Tract",
+      xlab="Proportion White", ylab="# of NPOs per Census Tract",
+      pch=19, col=gray(0.5,0.5), cex=2, las = 1)
 
+plot( syr$educ, syr$output3, 
+      abline(lm(syr$output3~syr$educ)), 
+      main="Proportion of population w/ high shool degree and # of NPOs per                 Census Tract",
+      xlab="Proportion of population w/ high shool degree", ylab="# of NPOs per             Census Tract",
+      pch=19, col=gray(0.5,0.5), cex=2, las = 1)
+
+plot( syr$mhh_income, syr$output3, 
+      abline(lm(syr$output3~syr$mhh_income)), 
+      main="Median HH Income and # of NPOs per Census Tract",
+      xlab="Median HH Income", ylab="# of NPOs per Census Tract",
+      pch=19, col=gray(0.5,0.5), cex=2, las = 1)
+
+plot( syr$prop_rent, syr$output3, 
+      abline(lm(syr$output3~syr$prop_rent)), 
+      main="Proportion of rented housing and # of NPOs per Census Tract",
+      xlab="Proportion of rented housing", ylab="# of NPOs per Census Tract",
+      pch=19, col=gray(0.5,0.5), cex=2, las = 1)
+
+plot( syr$pov, syr$output3, 
+      abline(lm(syr$output3~syr$pov)), 
+      main="Proportion of Poverty and # of NPOs per Census Tract",
+      xlab="Proportion of Poverty", ylab="# of NPOs per Census Tract",
+      pch=19, col=gray(0.5,0.5), cex=2, las = 1)
+
+```
+<br>
+
+The first three plots show a negative relationship with number of nonprofits, while the final two show a positive relationship. Census tracts in the Syracuse MSA with more white residents have less poverty nonprofits located within them. In addition, tracts with higher proportion of the population with a high school degree or a higher income also show that less poverty nonprofits locate in such areas. Higher proportions of rented housing or poverty census tracts have more poverty organizations residing within the same tracts.    
+
+## Correlations
+
+Going a step further, below it is shown how these six variables are correlated with each other. 
+
+```{r}
+
+# x is a matrix containing the data
+# method : correlation method. "pearson"" or "spearman"" is supported
+# removeTriangle : remove upper or lower triangle
+# results :  if "html" or "latex"
+# the results will be displayed in html or latex format
+corstars <-function(x, method=c("pearson", "spearman"), removeTriangle=c("upper", "lower"),
+                    result=c("none", "html", "latex"))
+  {
+  #Compute correlation matrix
+  require(Hmisc)
+  x <- as.matrix(x)
+  correlation_matrix<-rcorr(x, type=method[1])
+  R <- correlation_matrix$r # Matrix of correlation coeficients
+  p <- correlation_matrix$P # Matrix of p-value 
+  
+  ## Define notions for significance levels; spacing is important.
+  mystars <- ifelse(p < .001, "****", ifelse(p < .001, "*** ", ifelse(p < .01, "**  ", ifelse(p < .05, "*   ", "    "))))
+  
+  ## trunctuate the correlation matrix to two decimal
+  R <- format(round(cbind(rep(-1.11, ncol(x)), R), 2))[,-1]
+  
+  ## build a new matrix that includes the correlations with their apropriate stars
+  Rnew <- matrix(paste(R, mystars, sep=""), ncol=ncol(x))
+  diag(Rnew) <- paste(diag(R), " ", sep="")
+  rownames(Rnew) <- colnames(x)
+  colnames(Rnew) <- paste(colnames(x), "", sep="")
+  
+  ## remove upper triangle of correlation matrix
+  if(removeTriangle[1]=="upper"){
+    Rnew <- as.matrix(Rnew)
+    Rnew[upper.tri(Rnew, diag = TRUE)] <- ""
+    Rnew <- as.data.frame(Rnew)
+  }
+  
+  ## remove lower triangle of correlation matrix
+  else if(removeTriangle[1]=="lower"){
+    Rnew <- as.matrix(Rnew)
+    Rnew[lower.tri(Rnew, diag = TRUE)] <- ""
+    Rnew <- as.data.frame(Rnew)
+  }
+  
+  ## remove last column and return the correlation matrix
+  Rnew <- cbind(Rnew[1:length(Rnew)-1])
+  if (result[1]=="none") return(Rnew)
+  else{
+    if(result[1]=="html") print(xtable(Rnew), type="html")
+    else print(xtable(Rnew), type="latex") 
+  }
+} 
+
+
+syr.sub <- syr@data[ c("output3","prop_white", "educ", "mhh_income",                                    "prop_rent","pov") ]
+
+
+corstars(syr.sub)
+
+```
+<br>
+Correlations between variables reveals some trends. The directional relationships between variables remain the same as found in the scatterplots. Number of poverty nonprofits per census tract (output3) is correlated the most with proportion of white residents and the least with median household income. The variables that are most correlated together are median household income, proportion of rented housing, and porportion of poverty.  
+
+## Regressions
+
+Bivariate relationshsips between variables in OLS regression show similar results to the scatterplots and correlations. The direction of relationship between variables, not surprisingly, continues to be the same.
+
+```{r}
+# Bivariate relationships between number of NPO service catchment areas by census tract
+
+pander(m1 <- lm(syr$output3 ~ syr$prop_white),
+       caption = "Proportion of non-white residents")   
+pander(m2 <- lm(syr$output3 ~ syr$educ),
+       caption = "Proportion of residents with high school degree")
+pander(m3 <- lm(syr$output3 ~ syr$mhh_income),
+       caption = "Median household income")
+pander(m4 <- lm(syr$output3 ~ syr$prop_rent),
+       caption = "Proportion of residents living in rented housing")
+pander(m5 <- lm(syr$output3 ~ syr$pov),
+       caption = "Proportion of residents in poverty") 
+
+```
+<br>
+
+Additional information found in these bivariate OLS regressions not known from the scatterplots, but verified in the correlations, is that each independent variable on its own is significantly related to the number of poverty nonprofits per census tract.
+
+Below, two different OLS regression models include all five variables of interest. The first model reports the effect of environmental factors on the number of poverty organizations per census tract. The second model switches the number of nonprofits and the poverty variable, observing the effect of other variables and number of nonprofits on poverty per census tract. These two models are adapted from Peck 2008. 
+
+First, the models are checked to see whether any multicollinearity between predicting variables exist using a VIF test. Also, heteroscedasticity of error terms is checked with a Beusch-Pagan test.
 
 ```{R}
 
+# OLS reg of number of NPOs by five explanatory variables
+
+m6 <- lm(syr$output3 ~ syr$prop_white + syr$educ + syr$mhh_income + syr$prop_rent          + syr$pov)
+
+# poverty as a dependent variable, number of NPOs as a independent variable, same other explanatory variables
+
+m7 <- lm(syr$pov ~ syr$prop_white + syr$educ + syr$mhh_income + syr$prop_rent +           syr$output3)
+
+# Check for multicollinearity and heteroschedasticity
+
+  # Variance inflation factors test. Between 6-10 the variable is highly colinear     with others in the model.
+vif(m6)
+vif(m7)
+
+  # Breusch-Pagan Test
+bptest(m6) 
+bptest(m7)
+```
+<br>
+The VIF test reports no multicollinearity issues within the model. Median houshold income reports the highest VIF score at 5.9. This should not be a worry in the model however as scores of 10 or higher in a VIF test are more indicative of a multicollinearity problem (Hoffmann 2010). The Breusch-Pagan test rejects the null hypothesis (presence of homoscedasticity), reporting heteroscedasticity in both models. To correct for heteroscedassticity, the models are run using robust standard errors. 
+
+Running robust standard errors in R usually requires many lines of code. But, an add-on package can be downloaded for the summary function that simplifies robust standard errors to a simple logical argument. 
+
+```{r}
+# Download robust argument for summary function
+# Site for downloading robust standard error argument for summary function
+# https://economictheoryblog.com/2016/08/08/robust-standard-errors-in-r/
+
+url_robust <- "https://raw.githubusercontent.com/IsidoreBeautrelet/economictheoryblog/master/robust_summary.R"
+eval(parse(text = getURL(url_robust, ssl.verifypeer = FALSE)),
+     envir=.GlobalEnv)
+
+# First adjusted regression model
+
+set.caption("Factors affecting number of poverty nonprofits per census tract")
+pander(summary(m6, robust = T))
+
+``` 
+<br>
+
+The first OLS regression observes the factors affecting the number of poverty nonprofits per census tract. Results show that census tracts with an increase in the proportion of white non-hispanic residents and proportion of residents with a high school degree are significantly asociated with lower numbers of poverty nonprofits locating within them. Level of income, proportion of rented housing, and proportion of poverty do not affect the number of poverty nonprofits after accounting for other factors. This suggests that nonprofits are locating in the census tracts where minority or less educated populations live.
+
+What is important to point out is that poverty is not associated with the number of poverty nonprofits. This suggests that poverty nonprofits not only are located in census tracts where the worst poverty exists, but also in locations where poverty is not very high. This suggests that poverty organizations, though located in large numbers in the central city of the MSA, also exist in substantial amount in more rural census tracts. This presumes that underserved populations who need access to nonprofits providing services have a moderate level of accessibility geographically. 
+
+What this data cannot account for are other factors, such as the health of a client or their access to transportation, as well as the percieved factors of clients that may or may not incentvize them to contact services for nonprofits (such as perceived stigma to acess mental health services). In addtion, the observed locations of poverty nonprofits does not account for the use of satillite services or work by nonprofits in outreach programs done in the communities of need. Further research is needed to fully understand the issue of access. This project's answerable findings focus more primarily on WHERE poverty nonprofits are located and are their environmental factors that may affect the spatial location of nonprofits. 
+  
+Now that the location of poverty nonprofits has been investigated, does the presence of poverty nonprofits closer to higher poverty neighborhood affect poverty in any way? The second regression model observes factors affecting proportion of poverty per census tract.
+
+```{r}
+
+# Second adjusted regression model
+
+set.caption("Factors affecting proportion of poverty per census tract")
+pander(summary(m7, robust = T))
 
 ```
+<br>
 
+The OLS regression reports no significant relationship between the number of poverty nonprofits per census tract and poverty. Factors that are associated with lower levels of poverty are higher proportion of white non-hispanic residents, proportion of residents with a high school degree, and median household income. This suggests that socio-economic factors are predictive of census tract poverty while the number of nonprofit organizations located in tracts with more or less poverty does not. Another variable used in Peck's (2008) research which would be useful to investigate in the future is the amount of expenditures from nonprofits per census tract. Even so, Peck's research did not find a relationship to higher spending and lower poverty. Therefore, at least when it comes to improving poverty, the location of nonprofits in the Syracuse MSA does not affect the poverty status of residents in any substantial manner. 
+
+## Discussion
+
+What remains to be seen is whether and to what extent these relationships occur in larger, more spread out MSAs in the United States. Further research could investigate these trends using five data files located in the ASSETS folder of this repository. These data files include the poverty nonprofits in top five most populous MSAs in the United States. These datasets still require downloading their respective geo-coordinates. Following the code in this repository, analysis on these locations can be done once the files are geocoded.
+
+## References
+
+Hoffmann, John P. 2010. Linear Regression Analysis: Applications and Assumptions
+Second Edition. Provo, UT: Adobe Acrobat Professional.
+
+Peck, Laura R. 2008. "Do Antipoverty Nonprofits Locate Where People Need Them? Evidence from a Spatial Analysis of Phoenix." Nonprofit and Voluntary Sector Quarterly 37(1):138-151.

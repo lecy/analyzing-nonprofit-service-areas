@@ -50,19 +50,19 @@ library( GISTools )
 
 ```{r}
 
-file.url <- "https://raw.githubusercontent.com/lecy/analyzing-nonprofit-service-areas/master/SHAPEFILES/syr_merged.geojson"
+file.url <- "https://raw.githubusercontent.com/lecy/analyzing-nonprofit-service-areas/master/ASSETS/syr_merged.geojson"
 
 syr <- geojson_read( file.url, method="local", what="sp")
 
 spTransform(syr, CRS("+proj=longlat +datum=WGS84"))
 
-file.url <- "https://raw.githubusercontent.com/lecy/analyzing-nonprofit-service-areas/master/SHAPEFILES/syr_merged_cen.geojson"
+file.url <- "https://raw.githubusercontent.com/lecy/analyzing-nonprofit-service-areas/master/ASSETS/syr_merged_cen.geojson"
 
 centroids <- geojson_read( file.url, method="local", what="sp")
 
 spTransform(centroids, CRS("+proj=longlat +datum=WGS84"))
 
-file.url <- "https://raw.githubusercontent.com/lecy/analyzing-nonprofit-service-areas/master/SHAPEFILES/pov_orgs.geojson"
+file.url <- "https://raw.githubusercontent.com/lecy/analyzing-nonprofit-service-areas/master/ASSETS/pov_orgs.geojson"
 
 pov_orgs <- geojson_read( file.url, method="local", what="sp")
 
@@ -87,10 +87,10 @@ spTransform(org_buff, CRS("+proj=longlat +datum=WGS84"))
 
 
 # join data to centroid buffers
-centroids_buff$ID <- c(1:186)
-syr$ID <- c(1:186)
-org_buff$ID <- c(1:1095)
-pov_orgs$ID <- c(1:1095)
+centroids_buff$ID <- c(1:185)
+syr$ID <- c(1:185)
+org_buff$ID <- c(1:506)
+pov_orgs$ID <- c(1:506)
 
 c_buff <- merge( centroids_buff, syr@data, "ID", "ID" )
 test2 <- merge( org_buff, pov_orgs@data, "ID", "ID" )
@@ -99,7 +99,7 @@ test2 <- merge( org_buff, pov_orgs@data, "ID", "ID" )
 # Number of nonprofits within a 1.5 miles of middle of census tract.
 res <- poly.counts(pov_orgs, c_buff)
 setNames(res, c_buff$tract)
-syr$output <- setNames(res, c_buff$tract)
+syr$output1 <- setNames(res, c_buff$tract)
 
 # Number of nonprofits in each census tract
 res2 <- poly.counts(pov_orgs, syr)
@@ -108,8 +108,13 @@ syr$output2 <- setNames(res2, syr$tract)
 
 # Org way:
 # Number of nonprofit service catchment areas within a given census tract
-# df <- unknown.function(polygon, polygon)
-  # Not sure whether there a function that allows this kind of 
+
+inter_npo <- gIntersects(org_buff, syr, byid=TRUE)
+inter_npo2 <- inter_npo + 0
+inter_npo3 <- as.data.frame(inter_npo2)
+tot_col <- apply(inter_npo3, 1, sum)
+syr$output3 <- tot_col
+
 
 ### Maps to See spatially what is going on
 
@@ -145,16 +150,164 @@ syr_map2 %>% addProviderTiles(providers$CartoDB)
 
 # Scatterplots
 
-plot( syr$porp_white, syr$output, 
-      abline(lm(syr$output~syr$porp_white)),
+plot( syr$porp_white, syr$output1, 
+      abline(lm(syr$output1~syr$porp_white)),
+      main="Porportion White and # of NPOs Near Census Tract Centroid",
+      xlab="Porportion White", ylab="# of NPOs per Census Tract",
+      col="blue", las = 1)
+
+plot( syr$mhh_income, syr$output1, 
+      abline(lm(syr$output1~syr$mhh_income)), 
+      main="Median HH Income and # of NPOs Near Census Tract Centroid",
+      xlab="Median HH Income", ylab="# of NPOs per Census Tract",
+      col="blue", las = 1)
+
+plot( syr$porp_white, syr$output3, 
+      abline(lm(syr$output3~syr$porp_white)),
       main="Porportion White and # of NPOs per Census Tract",
       xlab="Porportion White", ylab="# of NPOs per Census Tract",
       col="blue", las = 1)
 
-plot( syr$mhh_income, syr$output, 
-      abline(lm(syr$output~syr$mhh_income)), 
+plot( syr$mhh_income, syr$output3, 
+      abline(lm(syr$output3~syr$mhh_income)), 
       main="Median HH Income and # of NPOs per Census Tract",
       xlab="Median HH Income", ylab="# of NPOs per Census Tract",
       col="blue", las = 1)
 
+# Regressions with number of NPO service catchment areas by census tract
+
+summary(m1 <- lm(syr$output3 ~ syr$porp_white))
+summary(m2 <- lm(syr$output3 ~ syr$pov))
+summary(m3 <- lm(syr$output3 ~ syr$educ))
+summary(m4 <- lm(syr$output3 ~ syr$prop_rent))
+summary(m5 <- lm(syr$output3 ~ syr$mhh_income))
+
+summary(m6 <- lm(syr$output3 ~ syr$porp_white + syr$pov + syr$educ +                              syr$prop_rent + syr$mhh_income))
+
+# poverty as a dependent variable, number of NPOs as a independent variable
+
+summary(m7 <- lm(syr$pov ~ syr$porp_white + syr$output3 + syr$educ +                              syr$prop_rent))
+
+# Peck 2008 model
+
+dv - # of NPOs
+dv - expenditures by # of NPOs   ASSETS
+1- porp of people in poverty (income below fed pov line)  poverty/tot_pop  
+2- unemployment rate   unemploy/tot_pop - porportion unemployed 
+   # note: need the num in labor force
+3- nonhispanic white   prop white
+4- hispanic  < consider doing blacks > prop hisp prop black
+5- older than 25 years with high school completion    high_sch + ged/tot_pop 
+6- av occupied housing values   occupied, mdn_hous_val
+   # Cannot compute b/c of NAs...fix NAs first
+7- renter occupied housing  tenure_rent/syr$tot_occup
+
+# Data cleaning
+syr$pov <- syr$poverty/syr$tot_pop
+syr$unemp <- syr$unemploy/syr$tot_pop
+syr$prop_black <- syr$black/syr$tot_race
+syr$prop_hisp <- syr$hispanic/syr$tot_race
+syr$educ <- (syr$high_sch + syr$ged)/syr$tot_pop
+syr$prop_rent <- syr$tenure_rent/syr$tot_occup
+
+
 ```
+
+## Exended analysis notes
+
+```{r}
+
+# https://www.bea.gov/regional/docs/msalist.cfm#N
+# https://www.nrcs.usda.gov/wps/portal/nrcs/detail/nj/technical/cp/cta/?cid=nrcs143_013697
+
+# 1) New York-Newark-Jersey City, NY-NJ-PA
+
+Bergen, NJ       34003
+Essex, NJ        34013
+Hudson, NJ       34017
+Hunterdon, NJ    34019
+Middlesex, NJ    34023
+Monmouth, NJ     34025
+Morris, NJ       34027
+Ocean, NJ        34029
+Passaic, NJ      34031
+Somerset, NJ     34035
+Sussex, NJ       34037
+Union, NJ        34039
+Bronx, NY        36005
+Dutchess, NY     36027
+Kings, NY        36047
+Nassau, NY       36059
+New York, NY     36061
+Orange, NY       36071
+Putnam, NY       36079
+Queens, NY       36081
+Richmond, NY     36085
+Rockland, NY     36087
+Suffolk, NY      36103
+Westchester, NY  36119
+Pike, PA         42103
+
+# 2) Los Angeles-Long Beach-Anaheim, CA 
+
+Los Angeles, CA 06037
+Orange, CA      06059
+
+# 3) Chicago-Naperville-Elgin, IL-IN-WI 
+
+Cook, IL    17031
+DeKalb, IL  17037
+DuPage, IL  17043
+Grundy, IL  17063
+Kane, IL    17089
+Kendall, IL 17093
+Lake, IL    17097
+McHenry, IL 17111
+Will, IL    17197
+Jasper, IN  18073
+Lake, IN    18089
+Newton, IN  18111
+Porter, IN  18127
+Kenosha, WI 55059
+
+# 4) Dallas-Fort Worth-Arlington, TX
+
+Collin, TX    48085
+Dallas, TX    48113
+Denton, TX    48121
+Ellis, TX     48139
+Hood, TX      48221
+Hunt, TX      48231
+Johnson, TX   48251
+Kaufman, TX   48257
+Parker, TX    48367
+Rockwall, TX  48397
+Somervell, TX 48425
+Tarrant, TX   48439
+Wise, TX      48497
+
+# 5) Houston-The Woodlands-Sugar Land, TX 
+
+Austin, TX     48015
+Brazoria, TX   48039
+Chambers, TX   48071
+Fort Bend, TX  48157
+Galveston, TX  48167
+Harris, TX     48201
+Liberty, TX    48291
+Montgomery, TX 48339
+Waller, TX     48473
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
