@@ -57,7 +57,7 @@ library( car )
 
 ## Load census shapefiles from GitHub
 
-Data can be downloaded directly from GitHub into R. In this case, we are downloading geojson files created in step 2. (Note: To see how these shapefiles were created, check [Shapefiles to Geojson Files](Step_1_-_Shapefiles_to_Geojson_Files.hmtl) HTML file  for more information). 
+Data can be downloaded directly from GitHub into R. In this case, we are downloading geojson files created in step 2. (Note: To see how these shapefiles were created, check [Shapefiles to Geojson Files](Step_2_-_Shapefiles_to_Geojson_Files.hmtl) HTML file  for more information). 
 
 After data is downloaded, the geojson files need to be converted to sp projections.
 
