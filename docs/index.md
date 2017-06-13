@@ -14,25 +14,25 @@ The hope is that this project will provide nonprofit researchers with relevant d
 
 This preliminary step provides the code of how data in the ASSETS folder on GitHub was downlowded and changed for the project.
 
-[Download and clean files](Download_and_Clean_Data.html)
+[Download and clean files](Step_1_-_Download_and_Clean_Data.html)
 
 # Step 2- Converting Shapefiles to Geojson Files
 
 Shows how U.S. Census shapefiles can be downloaded directly from the Census to R. Additionally, it shows how to merge a data frame with shapefiles and convert shapefiles into geojson files.
 
-[Shapefiles](Shapefiles_to_Geojson_Files.html)
+[Shapefiles](Step_2_-_Shapefiles_to_Geojson_Files.html)
 
 # Step 3 Maps and Analysis of Nonprofits
 
 Step 3 offers both visuals of how to map spatial data and how to run basic analysis in R. A discussion of the results of nonprofits in the Syracuse MSA are included in this step.
 
-[Maps and analysis](Maps_and_Analysis.html)
+[Maps and analysis](Step_3_-_Maps_and_Analysis.html)
 
 # Analysis Across Top 5 Populated U.S. Metropolitan Areas
 
 This final step combines code from all other steps to observe the effects on nonprofit location in New York, Los Angeles, Chicago, Dallas-Fort Worth, and Houston. A discussion about the code and findings is found below.
 
-[Extended analysis](exended_analysis.html)
+[Extended analysis](Step_4_-_Extended_Analysis.html)
 
 # Conclusion
 
