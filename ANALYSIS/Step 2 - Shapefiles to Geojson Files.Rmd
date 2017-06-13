@@ -1,5 +1,5 @@
 ---
-title: "Shapefiles to geojson files"
+title: "Step 2 - Shapefiles to Geojson Files"
 author: "Matt McKnight"
 date: "June 13, 2017"
 output:

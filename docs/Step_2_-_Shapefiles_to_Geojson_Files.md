@@ -1,4 +1,4 @@
-# Shapefiles to geojson files
+# Step 2 - Shapefiles to Geojson Files
 Matt McKnight  
 June 13, 2017  
 

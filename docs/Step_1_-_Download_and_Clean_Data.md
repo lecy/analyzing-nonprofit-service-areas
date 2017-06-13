@@ -1,6 +1,6 @@
-# Download and Clean Data
+# Step 1 - Download and Clean Data
 Matt McKnight  
-May 30, 2017  
+June 13, 2017  
 # INTRODUCTION
 
 Step 1 is presented to show the process of data collection for this project. Code from step 1 includes downloading and cleaning data from two different databases. First, information on nonprofit organizations in the Syracuse metropolitan area (MSA) is downloaded from IRS information. Coordinates for each nonprofit are then matched using a Google API. Second, U.S. Census information on demographics by census tract are downloaded from the census using an API. Data created from this code is already located in the asset folder of this repository and therefore need not be run. 
