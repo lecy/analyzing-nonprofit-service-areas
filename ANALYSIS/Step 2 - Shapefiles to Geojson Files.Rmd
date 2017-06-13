@@ -114,7 +114,7 @@ plot(syr_msa)
 
 ## Merge census attribute data with shapefile data
 
-Merge Syracuse MSA data from [Step 1](Download_and_Clean_Data.html). Occasionally, some census tract may need to be dropped because they only cover bodies of water with no other census information. In this MSA, one body of water census tract is deleted from the data. 
+Merge Syracuse MSA data from [Step 1](Step_1_-_Download_and_Clean_Data.html). Occasionally, some census tract may need to be dropped because they only cover bodies of water with no other census information. In this MSA, one body of water census tract is deleted from the data. 
 
 ```{r}
 

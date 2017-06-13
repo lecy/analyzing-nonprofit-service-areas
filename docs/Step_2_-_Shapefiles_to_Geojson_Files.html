@@ -343,7 +343,7 @@ GEOID$GEOID_tot &lt;-<span class="st"> </span>GEOID_tot
 </div>
 <div id="merge-census-attribute-data-with-shapefile-data" class="section level2">
 <h2>Merge census attribute data with shapefile data</h2>
-<p>Merge Syracuse MSA data from <a href="Download_and_Clean_Data.html">Step 1</a>. Occasionally, some census tract may need to be dropped because they only cover bodies of water with no other census information. In this MSA, one body of water census tract is deleted from the data.</p>
+<p>Merge Syracuse MSA data from <a href="Step_1_-_Download_and_Clean_Data.html">Step 1</a>. Occasionally, some census tract may need to be dropped because they only cover bodies of water with no other census information. In this MSA, one body of water census tract is deleted from the data.</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="co"># Merge data with MSA shp file</span>
 
 syr_merged &lt;-<span class="st"> </span><span class="kw">merge</span>(syr_msa, census_dat, 
