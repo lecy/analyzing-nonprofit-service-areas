@@ -848,3 +848,738 @@ Hoffmann, John P. 2010. Linear Regression Analysis: Applications and Assumptions
 Second Edition. Provo, UT: Adobe Acrobat Professional.
 
 Peck, Laura R. 2008. "Do Antipoverty Nonprofits Locate Where People Need Them? Evidence from a Spatial Analysis of Phoenix." Nonprofit and Voluntary Sector Quarterly 37(1):138-151.
+
+#####################################################################
+
+Extended Analysis
+
+#####################################################################
+
+# NONPROFIT SERVICE AREAS IN TOP 5 CITIES
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=F, message=F, fig.width=10)
+
+library( ggmap )
+library( rgdal )
+library( devtools )
+library( data.table )
+library( censusapi )
+library( plyr )
+library( gdata )
+library( geojsonio )
+library( acs )
+library( tigris )
+library( sf ) 
+library( sp )  
+library( rgeos )
+library( spatialEco ) 
+library( leaflet )
+library( raster )
+library( repmis )
+library( TSP )
+library( magrittr )
+library( lattice )
+library( GISTools )
+
+```
+
+
+## Download
+Download master file of tax exempt organizations from the web using the fread function in the data.table. This function can take data directly from the web and read it directly into R as a data frame. This step takes a while to download because the file is so large (over 1.5 million organizations).
+
+```{r eval=FALSE}
+
+print("Don't run me")
+
+# Download master file of tax exempt organizations
+orgs <- fread("http://nccs-data.urban.org/data/bmf/2016/bmf.bm1608.csv")
+
+dim(orgs)
+head(orgs)
+
+save(orgs, file = "../ASSETS/orgs.Rda")
+```
+
+## Subset by MSA
+
+```{r eval=FALSE}
+
+print("Don't run me")
+
+
+# Top five MSAs by population
+
+# Location for all FIPS codes and their respective MSAs
+# https://www.bea.gov/regional/docs/msalist.cfm#N
+
+# 1) New York-Newark-Jersey City, NY-NJ-PA
+
+nyc_orgs <- subset(orgs, 
+                     grepl("34003", FIPS) | 
+                     grepl("34013", FIPS) |
+                     grepl("34017", FIPS) |
+                     grepl("34019", FIPS) |
+                     grepl("34023", FIPS) |
+                     grepl("34025", FIPS) |
+                     grepl("34027", FIPS) |
+                     grepl("34029", FIPS) |
+                     grepl("34031", FIPS) |
+                     grepl("34035", FIPS) |
+                     grepl("34037", FIPS) |
+                     grepl("34039", FIPS) |
+                     grepl("36005", FIPS) |
+                     grepl("36027", FIPS) |
+                     grepl("36047", FIPS) |
+                     grepl("36059", FIPS) |
+                     grepl("36061", FIPS) |
+                     grepl("36071", FIPS) |
+                     grepl("36079", FIPS) |
+                     grepl("36081", FIPS) |
+                     grepl("36085", FIPS) |
+                     grepl("36087", FIPS) |
+                     grepl("36103", FIPS) |
+                     grepl("36119", FIPS) |
+                     grepl("42103", FIPS) )
+
+# 2) Los Angeles-Long Beach-Anaheim, CA 
+
+la_orgs <- subset(orgs, 
+                     grepl("6037", FIPS) | 
+                     grepl("6059", FIPS) )
+
+# 3) Chicago-Naperville-Elgin, IL-IN-WI 
+
+chi_orgs <- subset(orgs, 
+                     grepl("17031", FIPS) | 
+                     grepl("17037", FIPS) |
+                     grepl("17043", FIPS) |
+                     grepl("17063", FIPS) |
+                     grepl("17089", FIPS) |
+                     grepl("17093", FIPS) |
+                     grepl("17097", FIPS) |
+                     grepl("17111", FIPS) |
+                     grepl("17197", FIPS) |
+                     grepl("18073", FIPS) |
+                     grepl("18089", FIPS) |
+                     grepl("18111", FIPS) |
+                     grepl("18127", FIPS) |
+                     grepl("55059", FIPS) )
+
+# 4) Dallas-Fort Worth-Arlington, TX
+
+dfw_orgs <- subset(orgs, 
+                     grepl("48085", FIPS) | 
+                     grepl("48113", FIPS) |
+                     grepl("48121", FIPS) |
+                     grepl("48139", FIPS) |
+                     grepl("48221", FIPS) |
+                     grepl("48231", FIPS) |
+                     grepl("48251", FIPS) |
+                     grepl("48257", FIPS) |
+                     grepl("48367", FIPS) |
+                     grepl("48397", FIPS) |
+                     grepl("48425", FIPS) |
+                     grepl("48439", FIPS) |
+                     grepl("48497", FIPS) )
+                     
+# 5) Houston-The Woodlands-Sugar Land, TX 
+
+hou_orgs <- subset(orgs, 
+                     grepl("48015", FIPS) | 
+                     grepl("48039", FIPS) |
+                     grepl("48071", FIPS) |
+                     grepl("48157", FIPS) |
+                     grepl("48167", FIPS) |
+                     grepl("48201", FIPS) |
+                     grepl("48291", FIPS) |
+                     grepl("48339", FIPS) |
+                     grepl("48473", FIPS) )
+                     
+
+```
+
+## Subset by poverty organizations
+
+```{r eval=FALSE}
+
+print("Don't run me")
+
+# 1) New York-Newark-Jersey City, NY-NJ-PA
+
+nyc_pov_orgs <- subset(nyc_orgs, 
+                        grepl("B6.", NTEECC) | 
+                        grepl("B92", NTEECC) |
+                        grepl("E32", NTEECC) |  
+                        grepl("E7.", NTEECC) |  
+                        grepl("F2.", NTEECC) |
+                        grepl("F32", NTEECC) |  
+                        grepl("I2.", NTEECC) |
+                        grepl("I4.", NTEECC) |  
+                        grepl("I7.", NTEECC) |
+                        grepl("I8.", NTEECC) |  
+                        grepl("J2.", NTEECC) |
+                        grepl("J3.", NTEECC) |  
+                        grepl("K3.", NTEECC) |  
+                        grepl("K4.", NTEECC) |  
+                        grepl("K5.", NTEECC) |
+                        grepl("L2.", NTEECC) |
+                        grepl("L3.", NTEECC) |  
+                        grepl("L4.", NTEECC) |  
+                        grepl("L8.", NTEECC) |  
+                        grepl("O2.", NTEECC) |  
+                        grepl("O3.", NTEECC) |
+                        grepl("O5.", NTEECC) |  
+                        grepl("P", NTEECC)   |
+                        grepl("R2.", NTEECC) |  
+                        grepl("R3.", NTEECC) |
+                        grepl("S2.", NTEECC) )
+
+dim(nyc_pov_orgs)
+head(nyc_pov_orgs)
+
+save(nyc_pov_orgs, file = "../ASSETS/nyc_pov_orgs.Rda")
+
+# 2) Los Angeles-Long Beach-Anaheim, CA 
+
+la_pov_orgs <- subset(la_orgs, 
+                        grepl("B6.", NTEECC) | 
+                        grepl("B92", NTEECC) |
+                        grepl("E32", NTEECC) |  
+                        grepl("E7.", NTEECC) |  
+                        grepl("F2.", NTEECC) |
+                        grepl("F32", NTEECC) |  
+                        grepl("I2.", NTEECC) |
+                        grepl("I4.", NTEECC) |  
+                        grepl("I7.", NTEECC) |
+                        grepl("I8.", NTEECC) |  
+                        grepl("J2.", NTEECC) |
+                        grepl("J3.", NTEECC) |  
+                        grepl("K3.", NTEECC) |  
+                        grepl("K4.", NTEECC) |  
+                        grepl("K5.", NTEECC) |
+                        grepl("L2.", NTEECC) |
+                        grepl("L3.", NTEECC) |  
+                        grepl("L4.", NTEECC) |  
+                        grepl("L8.", NTEECC) |  
+                        grepl("O2.", NTEECC) |  
+                        grepl("O3.", NTEECC) |
+                        grepl("O5.", NTEECC) |  
+                        grepl("P", NTEECC)   |
+                        grepl("R2.", NTEECC) |  
+                        grepl("R3.", NTEECC) |
+                        grepl("S2.", NTEECC) )
+
+dim(la_pov_orgs)
+head(la_pov_orgs)
+
+save(la_pov_orgs, file="../ASSETS/la_pov_orgs.Rda")
+
+# 3) Chicago-Naperville-Elgin, IL-IN-WI 
+
+
+chi_pov_orgs <- subset(chi_orgs, 
+                        grepl("B6.", NTEECC) | 
+                        grepl("B92", NTEECC) |
+                        grepl("E32", NTEECC) |  
+                        grepl("E7.", NTEECC) |  
+                        grepl("F2.", NTEECC) |
+                        grepl("F32", NTEECC) |  
+                        grepl("I2.", NTEECC) |
+                        grepl("I4.", NTEECC) |  
+                        grepl("I7.", NTEECC) |
+                        grepl("I8.", NTEECC) |  
+                        grepl("J2.", NTEECC) |
+                        grepl("J3.", NTEECC) |  
+                        grepl("K3.", NTEECC) |  
+                        grepl("K4.", NTEECC) |  
+                        grepl("K5.", NTEECC) |
+                        grepl("L2.", NTEECC) |
+                        grepl("L3.", NTEECC) |  
+                        grepl("L4.", NTEECC) |  
+                        grepl("L8.", NTEECC) |  
+                        grepl("O2.", NTEECC) |  
+                        grepl("O3.", NTEECC) |
+                        grepl("O5.", NTEECC) |  
+                        grepl("P", NTEECC)   |
+                        grepl("R2.", NTEECC) |  
+                        grepl("R3.", NTEECC) |
+                        grepl("S2.", NTEECC) )
+
+dim(chi_pov_orgs)
+head(chi_pov_orgs)
+
+save(chi_pov_orgs, file="../ASSETS/chi_pov_orgs.Rda")
+
+# 4) Dallas-Fort Worth-Arlington, TX
+
+dfw_pov_orgs <- subset(dfw_orgs, 
+                        grepl("B6.", NTEECC) | 
+                        grepl("B92", NTEECC) |
+                        grepl("E32", NTEECC) |  
+                        grepl("E7.", NTEECC) |  
+                        grepl("F2.", NTEECC) |
+                        grepl("F32", NTEECC) |  
+                        grepl("I2.", NTEECC) |
+                        grepl("I4.", NTEECC) |  
+                        grepl("I7.", NTEECC) |
+                        grepl("I8.", NTEECC) |  
+                        grepl("J2.", NTEECC) |
+                        grepl("J3.", NTEECC) |  
+                        grepl("K3.", NTEECC) |  
+                        grepl("K4.", NTEECC) |  
+                        grepl("K5.", NTEECC) |
+                        grepl("L2.", NTEECC) |
+                        grepl("L3.", NTEECC) |  
+                        grepl("L4.", NTEECC) |  
+                        grepl("L8.", NTEECC) |  
+                        grepl("O2.", NTEECC) |  
+                        grepl("O3.", NTEECC) |
+                        grepl("O5.", NTEECC) |  
+                        grepl("P", NTEECC)   |
+                        grepl("R2.", NTEECC) |  
+                        grepl("R3.", NTEECC) |
+                        grepl("S2.", NTEECC) )
+
+dim(dfw_pov_orgs)
+head(dfw_pov_orgs)
+
+save(dfw_pov_orgs, file="../ASSETS/dfw_pov_orgs.Rda")
+
+# 5) Houston-The Woodlands-Sugar Land, TX 
+
+hou_pov_orgs <- subset(hou_orgs, 
+                        grepl("B6.", NTEECC) | 
+                        grepl("B92", NTEECC) |
+                        grepl("E32", NTEECC) |  
+                        grepl("E7.", NTEECC) |  
+                        grepl("F2.", NTEECC) |
+                        grepl("F32", NTEECC) |  
+                        grepl("I2.", NTEECC) |
+                        grepl("I4.", NTEECC) |  
+                        grepl("I7.", NTEECC) |
+                        grepl("I8.", NTEECC) |  
+                        grepl("J2.", NTEECC) |
+                        grepl("J3.", NTEECC) |  
+                        grepl("K3.", NTEECC) |  
+                        grepl("K4.", NTEECC) |  
+                        grepl("K5.", NTEECC) |
+                        grepl("L2.", NTEECC) |
+                        grepl("L3.", NTEECC) |  
+                        grepl("L4.", NTEECC) |  
+                        grepl("L8.", NTEECC) |  
+                        grepl("O2.", NTEECC) |  
+                        grepl("O3.", NTEECC) |
+                        grepl("O5.", NTEECC) |  
+                        grepl("P", NTEECC)   |
+                        grepl("R2.", NTEECC) |  
+                        grepl("R3.", NTEECC) |
+                        grepl("S2.", NTEECC) )
+
+dim(hou_pov_orgs)
+head(hou_pov_orgs)
+
+save(hou_pov_orgs, file="../ASSETS/hou_pov_orgs.Rda")
+```
+
+## Geocode addresses of poverty organizations
+
+```{r}
+
+# download specific ggmap, register Google key
+
+devtools::install_github("dkahle/ggmap")
+
+register_google(key = 'AIzaSyAMrECdXqpOt443ms6nzh118uUsqC2lE6M',
+                account_type = "premium", day_limit = 15000)
+
+# subset orgs for gecoding address information
+
+nyc_pov_orgs_gps <- subset(nyc_pov_orgs, select=c(EIN:INCOME))
+
+nyc_pov_orgs_gps$whole_address <- paste(nyc_pov_orgs_gps$ADDRESS,                                                        nyc_pov_orgs_gps$CITY, sep = ", ") 
+nyc_pov_orgs_gps$whole_address <- paste(nyc_pov_orgs_gps$whole_address,                                                  nyc_pov_orgs_gps$STATE, sep = ", ")
+nyc_pov_orgs_gps$whole_address <- paste(nyc_pov_orgs_gps$whole_address,                                                  nyc_pov_orgs_gps$ZIP5, sep = ", ") 
+
+nyc_pov_orgs_gps <- subset(nyc_pov_orgs_gps, select=c(whole_address, EIN:INCOME))
+
+for (i in 1:nrow(nyc_pov_orgs_gps)) {
+  latlon = geocode(as.character(nyc_pov_orgs_gps[i,1]), override_limit=TRUE) 
+  nyc_pov_orgs_gps$lon[i] = as.numeric(latlon[1])
+  nyc_pov_orgs_gps$lat[i] = as.numeric(latlon[2])
+}
+
+
+save(nyc_pov_orgs_gps, file="../ASSETS/nyc_pov_orgs_gps.Rda")
+
+##############################3
+
+# 5) Houston MSA geocoding
+
+register_google(key = 'AIzaSyAMrECdXqpOt443ms6nzh118uUsqC2lE6M',
+                account_type = "premium", day_limit = 15000)
+
+# subset orgs for gecoding address information
+
+hou_pov_orgs_gps <- subset(hou_pov_orgs, select=c(EIN:INCOME))
+
+hou_pov_orgs_gps$whole_address <- paste(hou_pov_orgs_gps$ADDRESS,                                                        hou_pov_orgs_gps$CITY, sep = ", ") 
+hou_pov_orgs_gps$whole_address <- paste(hou_pov_orgs_gps$whole_address,                                                  hou_pov_orgs_gps$STATE, sep = ", ")
+hou_pov_orgs_gps$whole_address <- paste(hou_pov_orgs_gps$whole_address,                                                  hou_pov_orgs_gps$ZIP5, sep = ", ") 
+
+hou_pov_orgs_gps <- subset(hou_pov_orgs_gps, select=c(whole_address, EIN:INCOME))
+
+for (i in 1:nrow(hou_pov_orgs_gps)) {
+  latlon = geocode(as.character(hou_pov_orgs_gps[i,1])) 
+  hou_pov_orgs_gps$lon[i] = as.numeric(latlon[1])
+  hou_pov_orgs_gps$lat[i] = as.numeric(latlon[2])
+}
+
+# Make sure you find a way to then take any PO Boxes and place them in the 
+# center of centroids, and only the ones that are NAs.
+
+save(hou_pov_orgs_gps, file="../ASSETS/hou_pov_orgs_gps.Rda")
+```
+
+# CENSUS DATA
+
+## Census API package
+
+Download US census data for top 5 MSAs
+
+```{r}
+
+censuskey <- "f8064a17832b439e690be95ab0e0ef9a78617584"
+
+var.list <- c("NAME", 
+              "B25077_001E", "B25003_001E", "B25003_002E", "B25003_003E",
+              "B25002_001E", "B25002_002E", "B25002_003E", "B01003_001E",
+              "B19013_001E", "B17020_002E", "B12006_001E", "B23025_005E",                      "B15003_017E", "B15003_018E",
+              "B03001_001E", "B03002_003E", "B03002_004E", "B03002_005E",
+              "B03002_006E", "B03002_007E", "B03002_008E", "B03002_009E", 
+              "B03001_002E", "B03001_003E", 
+              "GEOID" 
+              )
+
+acs_2015 <- getCensus( name="acs5",
+                       vintage = 2015,
+                       key = censuskey,
+                       vars= var.list, 
+                       region ="tract:*", 
+                       regionin ="state:36" 
+                     )
+
+
+# 1) subset to NY
+
+acs_2015_syr <- acs_2015[which (acs_2015$county == "067" | 
+                                acs_2015$county == "075" |
+                                acs_2015$county == "053"), ]
+
+# 2) subset to LA
+
+
+# 3) subset to CHI
+
+
+# 4) subset to DFW
+
+
+# 5) subset to HOU
+
+
+```
+
+
+## Rename Variables
+
+Rename variables of interest in each subsetted data
+
+```{r}
+
+rename( acs_2015_syr, 
+       c("B25077_001E" = "mdn_hous_val", 
+         "B25003_001E" = "tenure_tot", 
+         "B25003_002E" = "tenure_own", 
+         "B25003_003E" = "tenure_rent",
+         "B25002_001E" = "tot_occup", 
+         "B25002_002E" = "occupied",
+         "B25002_003E" = "vacant", 
+         "B01003_001E" = "tot_pop", 
+         "B19013_001E" = "mhh_income",
+         "B17020_002E" = "poverty",
+         "B12006_001E" = "labor_part",
+         "B23025_005E" = "unemploy",
+         "B15003_017E" = "high_sch",
+         "B15003_018E" = "ged",
+         "B03001_001E" = "tot_race",
+         "B03002_003E" = "white",             
+         "B03002_004E" = "black", 
+         "B03002_005E" = "am_ind",
+         "B03002_006E" = "asian", 
+         "B03002_007E" = "islander",
+         "B03002_008E" = "other", 
+         "B03002_009E" = "mixed",
+         "B03001_002E" = "not_hispanic",
+         "B03001_003E" = "hispanic")
+        )
+
+acs_2015_syr <- rename.vars(acs_2015_syr,
+            c("B25077_001E", "B25003_001E", "B25003_002E", "B25003_003E",
+              "B25002_001E", "B25002_002E", "B25002_003E", "B01003_001E",
+              "B19013_001E", "B17020_002E", "B12006_001E", "B23025_005E",                      "B15003_017E", "B15003_018E",
+              "B03001_001E", "B03002_003E", "B03002_004E", "B03002_005E",
+              "B03002_006E", "B03002_007E", "B03002_008E", "B03002_009E", 
+              "B03001_002E", "B03001_003E"),  
+            c("mdn_hous_val", "tenure_tot", "tenure_own", "tenure_rent",
+              "tot_occup", "occupied", "vacant", "tot_pop", 
+              "mhh_income", "poverty", "labor_part", "unemploy",
+              "high_sch", "ged",
+              "tot_race", "white", "black", "am_ind",
+              "asian", "islander", "other", "mixed",
+              "not_hispanic", "hispanic")
+            )
+
+head(acs_2015_syr)
+
+```
+
+## Create variables 
+
+Create 8 variables of interest from the US Census data
+
+
+```{r}
+
+# Create proportion white and proportion minority
+
+# Proportion race variables (by total population per census tract)
+
+# White non-hispanic
+
+acs_2015_syr$porp_white <- (acs_2015_syr$white) / (acs_2015_syr$tot_race)
+
+# All minorities (reverse of white non-hispanic) 
+
+acs_2015_syr$porp_m <- abs((acs_2015_syr$porp_white) - 1) 
+
+# Black
+
+acs_2015_syr$prop_black <- acs_2015_syr$black / acs_2015_syr$tot_race
+
+# Hispanic
+
+acs_2015_syr$prop_hisp <- acs_2015_syr$hispanic / acs_2015_syr$tot_race
+
+# Proportion of people whose incomes are lower than the federal poverty line
+
+acs_2015_syr$pov <- acs_2015_syr$poverty / acs_2015_syr$tot_pop
+
+# percentage of unemployed, NOT umemployment rate
+
+acs_2015_syr$unemp <- acs_2015_syr$unemploy / acs_2015_syr$tot_pop
+
+# high school degree, either graduated or with a GED
+
+acs_2015_syr$educ <- (acs_2015_syr$high_sch + acs_2015_syr$ged) /                                      acs_2015_syr$tot_pop
+
+# Porportion of occupied housing that is rented
+
+acs_2015_syr$prop_rent <- acs_2015_syr$tenure_rent / acs_2015_syr$tot_occup
+
+
+names(acs_2015_syr)
+
+
+```
+
+# Create Geojson Files
+
+
+```{r}
+
+# How to download shapefiles from the census directly using tigris functions
+# https://rdrr.io/cran/tigris/man/blocks.html
+
+Mad_county <- tracts(state = "NY", county = "053", year = "2015")
+
+On_county <- tracts(state = "NY", county = "067", year = "2015")
+
+Osw_county <- tracts(state = "NY", county = "075", year = "2015")
+
+# Drop NAs
+Mad_county <- na.omit(Mad_county)
+On_county <- na.omit(On_county)
+Osw_county <- na.omit(Osw_county)
+
+```
+
+
+
+## Clean census data GEOID
+
+The data downloaded from the census API includes values in GEOID cells that need to be removed prior to merging with shapefiles.
+
+```{r}
+
+head( acs_2015_syr$GEOID)
+
+acs_2015_syr$GEOID <- gsub( acs_2015_syr$GEOID, pattern="14000US", replacement="" )
+census_dat <- acs_2015_syr
+
+head(acs_2015_syr$GEOID)
+```
+
+
+## Merge 3 spatial files per MSA
+
+When the shapefiles are joined, they do not create a full list variable of all GEOIDs. This step creates a GEOID variabe combined from all three shapefiles.
+
+```{r}
+
+# Spatial join
+syr_msa <- union(Mad_county, On_county)
+syr_msa <- union(syr_msa, Osw_county)
+
+# Create complete 
+
+GEOID <- data.frame(syr_msa$GEOID.1, syr_msa$GEOID.2, syr_msa$GEOID)
+head(GEOID)
+GEOID_tot <- GEOID[!is.na(GEOID)]
+GEOID$GEOID_tot <- GEOID_tot
+head(GEOID)
+
+syr_msa$GEOID_full <- GEOID_tot
+
+# syr_msa <- cbind( Mad_county, On_county )
+# syr_msa <- cbind( syr_msa, Osw_county )
+# Does not work, Error: arguments imply differing number of rows: 16, 140
+
+plot(syr_msa)
+
+```
+
+
+## Merge census attribute data with shapefile data
+
+```{r}
+
+# Merge data with MSA shp file
+
+syr_merged <- merge(syr_msa, census_dat, 
+                    by.x = "GEOID_full", by.y = "GEOID")                      
+
+plot(syr_merged)
+title(main = "Syracuse MSA, NY")
+head(syr_merged)
+nrow(syr_merged)
+
+# Drop census tract 9900, water census tract in Oswego county
+syr_merged_clean <- syr_merged[!(syr_merged$tract=="990000"),]
+nrow(syr_merged)
+
+plot(syr_merged_clean)
+title(main = "Syracuse MSA, NY")
+
+```
+
+
+# GEOJSON FILES
+
+## Convert shapefiles to geojson files for the Syracuse MSA.
+
+```{r}
+geojson_write(syr_merged_clean, geometry="polygon", file="../ASSETS/syr_merged.geojson")
+
+```
+
+
+## Create a shapefile with centroids for every census tract and convert to geojson format.
+
+```{r}
+
+syr_merged_cen = gCentroid(syr_merged_clean, byid=TRUE)
+
+geojson_write(syr_merged_cen, geometry="point", file="../ASSETS/syr_merged_cen.geojson")
+
+```
+
+
+### Analysis ###
+
+```{r}
+
+# Create buffers, render in same projection
+centroids_buff <- gBuffer(spgeom = centroids, width = .024, joinStyle="ROUND", byid = T)
+centroids_buff@proj4string
+spTransform(centroids_buff, CRS("+proj=longlat +datum=WGS84"))
+
+org_buff <- gBuffer(spgeom = pov_orgs, width = .024, joinStyle="ROUND", byid = T)
+centroids_buff@proj4string
+spTransform(org_buff, CRS("+proj=longlat +datum=WGS84"))
+
+
+# join data to centroid buffers
+centroids_buff$ID <- c(1:185)
+syr$ID <- c(1:185)
+org_buff$ID <- c(1:506)
+pov_orgs$ID <- c(1:506)
+
+c_buff <- merge( centroids_buff, syr@data, "ID", "ID" )
+test2 <- merge( org_buff, pov_orgs@data, "ID", "ID" )
+
+
+# Number of nonprofits within a 1.5 miles of middle of census tract.
+res <- poly.counts(pov_orgs, c_buff)
+setNames(res, c_buff$tract)
+syr$output1 <- setNames(res, c_buff$tract)
+
+# Number of nonprofits in each census tract
+res2 <- poly.counts(pov_orgs, syr)
+setNames(res2, syr$tract)
+syr$output2 <- setNames(res2, syr$tract)
+
+# Org way:
+# Number of nonprofit service catchment areas within a given census tract
+
+inter_npo <- gIntersects(org_buff, syr, byid=TRUE)
+inter_npo2 <- inter_npo + 0
+inter_npo3 <- as.data.frame(inter_npo2)
+tot_col <- apply(inter_npo3, 1, sum)
+syr$output3 <- tot_col
+
+# Scatterplots
+
+plot( syr$porp_white, syr$output3, 
+      abline(lm(syr$output3~syr$porp_white)),
+      main="Porportion White and # of NPOs per Census Tract",
+      xlab="Porportion White", ylab="# of NPOs per Census Tract",
+      col="blue", las = 1)
+
+plot( syr$mhh_income, syr$output3, 
+      abline(lm(syr$output3~syr$mhh_income)), 
+      main="Median HH Income and # of NPOs per Census Tract",
+      xlab="Median HH Income", ylab="# of NPOs per Census Tract",
+      col="blue", las = 1)
+
+# Regressions with number of NPO service catchment areas by census tract
+
+summary(m1 <- lm(syr$output3 ~ syr$porp_white))
+summary(m2 <- lm(syr$output3 ~ syr$pov))
+summary(m3 <- lm(syr$output3 ~ syr$educ))
+summary(m4 <- lm(syr$output3 ~ syr$prop_rent))
+summary(m5 <- lm(syr$output3 ~ syr$mhh_income))
+
+summary(m6 <- lm(syr$output3 ~ syr$porp_white + syr$pov + syr$educ +                              syr$prop_rent + syr$mhh_income))
+
+# poverty as a dependent variable, number of NPOs as a independent variable
+
+summary(m7 <- lm(syr$pov ~ syr$porp_white + syr$output3 + syr$educ +                              syr$prop_rent))
+
+```
+
+
+
+
+
+
